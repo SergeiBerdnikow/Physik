@@ -92,7 +92,7 @@
   <section class="karte" id="szeneKarte">
     <h2>Spielplatz</h2>
     <canvas id="szene" aria-label="Animation: Sergej schubst Liyana auf der Schaukel"></canvas>
-    <p class="klein">Tipp: Während die Schaukel läuft, in die Szene tippen (oder Taste <kbd>S</kbd>) – dann schubst Sergej. Probier aus, wann es hilft und wann es bremst!</p>
+    <p class="klein">Tipp: Während die Schaukel läuft, in die Szene tippen (oder Taste <kbd>S</kbd>) – dann schubst Sergej. Probier aus, wann es hilft und wann es bremst!<br><b>Entdecken:</b> Ändere bei „Einstellungen“ immer nur einen Regler (Länge, Amplitude oder Masse) und lies nach 3 Schwingungen <i>T</i> in der Messapp ab.</p>
   </section>
 
   <section class="karte" id="diagrammKarte">
@@ -1021,7 +1021,7 @@ function messwerteZeigen() {
   $("messwerte").innerHTML =
     `<div><b>t</b> = ${fmt(Z.t, 2, "s")}</div><div><b>s</b> = ${fmt(s, 2, "m")}</div>
      <div><b>v</b> = ${fmt(v, 2, "m/s")} (${fmt(v * 3.6, 1, "km/h")})</div><div><b>h</b> = ${fmt(E.h * 100, 1, "cm")}</div>
-     <div><b>T</b> (Formel) = ${fmt(TFormel(P.l), 2, "s")}</div><div><b>Winkel</b> = ${fmt(Z.phi * 180 / Math.PI, 1, "°")}</div>`;
+     <div><b>T</b> (Messapp) = ${Z.n ? fmt(Z.tLetzt / Z.n, 2, "s") : "…"}</div><div><b>Winkel</b> = ${fmt(Z.phi * 180 / Math.PI, 1, "°")}</div>`;
   const E0 = P.m * Z.E0;
   balken.zeichnen(E, Math.max(E0 * 1.15, E.ges * 1.05) || 1);
 }
@@ -1076,15 +1076,16 @@ function setze(werte, vergleich = null) {
   schalter(); neuStart();
 }
 const presets = [
-  { name: "A2 Beispiel A: l = 1,0 m", tun: () => setze({ l: 1.0, s0: 0.25, m: 22 }) },
-  { name: "A3 Stufe 1: l = 1,6 m", tun: () => setze({ l: 1.6, s0: 0.4, m: 22 }) },
-  { name: "A3 Stufe 2: Riesenschaukel l = 4,0 m", tun: () => setze({ l: 4.0, s0: 1.0, m: 22 }) },
-  { name: "A3 Stufe 3: l = 2,5 m", tun: () => setze({ l: 2.5, s0: 0.6, m: 22 }) },
-  { name: "A4 a) Modell-Brille", tun: () => { setze(Object.assign({}, KLAUSUR)); P.modell = true; schalter(); } },
-  { name: "A4 b) 10 Schwingungen stoppen", tun: () => setze(Object.assign({ stopNach: 10 }, KLAUSUR)) },
-  { name: "A4 c), d) Liyana schaukelt", tun: () => setze(Object.assign({}, KLAUSUR)) },
-  { name: "A4 e) Fester schubsen", tun: () => setze(Object.assign({}, KLAUSUR, { s0: 1.0 }), Object.assign({}, KLAUSUR)) },
-  { name: "A4 e) Papa auf die Schaukel (85 kg)", tun: () => setze(Object.assign({}, KLAUSUR, { m: 85 }), Object.assign({}, KLAUSUR)) },
+  { name: "A1 Entdecken: Start", tun: () => setze({ l: 2.0, s0: 0.3, m: 22 }) },
+  { name: "A3 Beispiel A: l = 1,0 m", tun: () => setze({ l: 1.0, s0: 0.25, m: 22 }) },
+  { name: "A4 Stufe 1: l = 1,6 m", tun: () => setze({ l: 1.6, s0: 0.4, m: 22 }) },
+  { name: "A4 Stufe 2: Riesenschaukel l = 4,0 m", tun: () => setze({ l: 4.0, s0: 1.0, m: 22 }) },
+  { name: "A4 Stufe 3: l = 2,5 m", tun: () => setze({ l: 2.5, s0: 0.6, m: 22 }) },
+  { name: "A5 a) Modell-Brille", tun: () => { setze(Object.assign({}, KLAUSUR)); P.modell = true; schalter(); } },
+  { name: "A5 b) 10 Schwingungen stoppen", tun: () => setze(Object.assign({ stopNach: 10 }, KLAUSUR)) },
+  { name: "A5 c), d) Liyana schaukelt", tun: () => setze(Object.assign({}, KLAUSUR)) },
+  { name: "A5 e) Fester schubsen", tun: () => setze(Object.assign({}, KLAUSUR, { s0: 1.0 }), Object.assign({}, KLAUSUR)) },
+  { name: "A5 e) Papa auf die Schaukel (85 kg)", tun: () => setze(Object.assign({}, KLAUSUR, { m: 85 }), Object.assign({}, KLAUSUR)) },
   { name: "f), g) Ohne Anschubsen (30 s)", tun: () => setze(Object.assign({ reib: true }, KLAUSUR)) },
   { name: "h) Im Takt anschubsen", tun: () => setze(Object.assign({ reib: true, takt: true }, KLAUSUR)) },
 ];
@@ -1098,28 +1099,28 @@ for (const p of presets) {
 function laufeBis(bed, max = 40) { lauf.pause(); const n = Math.round(max / DT); for (let i = 0; i < n && !bed(); i++) physikSchritt(); lauf.pause(); }
 const sichtbar = ids => { for (const [id, r] of diagramm.reihen) r.sichtbar = ids.includes(id); diagramm.auswahl($("kurvenwahl")); achsenAnpassen(); };
 const schritte = schrittmodus([
-  { text: "<b>Aufgabe 1:</b> Ein Fadenpendel – hier Liyana auf der Schaukel. Für kleine Auslenkungen gilt <i>T</i> = 2π·√(<i>l</i>/<i>g</i>). Anders als beim Federpendel steht <b>keine Masse</b> in der Formel.",
+  { text: "<b>Aufgabe 1 und 2:</b> Ein Fadenpendel – hier Liyana auf der Schaukel. Für kleine Auslenkungen gilt <i>T</i> = 2π·√(<i>l</i>/<i>g</i>). Anders als beim Federpendel steht <b>keine Masse</b> in der Formel.",
     vorbereiten: () => { setze(Object.assign({}, KLAUSUR)); sichtbar(["s"]); laufeBis(() => Z.t >= 1.5 - 1e-9); } },
-  { text: "<b>Aufgabe 2, Beispiel A:</b> <i>l</i> = 1,0 m ⇒ <i>T</i> = 2π·√(1,0 m / 9,81 m/s²) ≈ <b>2,0 s</b>. Starte die Simulation und vergleiche mit der Messapp.",
-    vorbereiten: () => { presets[0].tun(); sichtbar(["s"]); } },
-  { text: "<b>4 a)</b> Sergej setzt die <b>Modell-Brille</b> auf: Aus Liyana und der Schaukel wird ein Fadenpendel – ein Massepunkt an einem masselosen Faden der Länge <i>l</i>. Welche Vereinfachungen stecken darin?",
-    vorbereiten: () => { presets[4].tun(); sichtbar(["s", "sth"]); } },
-  { text: "<b>4 b)</b> Die Messapp stoppt 10 Schwingungen: etwa 30 s, also <i>T</i> = 3,0 s. Umgestellt: <i>l</i> = <i>g</i>·<i>T</i>² / (4π²) = 9,81 m/s² · (3,0 s)² / 39,48 ≈ <b>2,24 m</b>. <span class='klein'>(Die Simulation rechnet ohne Kleinwinkelnäherung – deshalb misst sie ein paar Hundertstel mehr.)</span>",
+  { text: "<b>Aufgabe 3, Beispiel A:</b> <i>l</i> = 1,0 m ⇒ <i>T</i> = 2π·√(1,0 m / 9,81 m/s²) ≈ <b>2,0 s</b>. Starte die Simulation und vergleiche mit der Messapp.",
+    vorbereiten: () => { presets[1].tun(); sichtbar(["s"]); } },
+  { text: "<b>5 a)</b> Sergej setzt die <b>Modell-Brille</b> auf: Aus Liyana und der Schaukel wird ein Fadenpendel – ein Massepunkt an einem masselosen Faden der Länge <i>l</i>. Welche Vereinfachungen stecken darin?",
+    vorbereiten: () => { presets[5].tun(); sichtbar(["s", "sth"]); } },
+  { text: "<b>5 b)</b> Die Messapp stoppt 10 Schwingungen: etwa 30 s, also <i>T</i> = 3,0 s. Umgestellt: <i>l</i> = <i>g</i>·<i>T</i>² / (4π²) = 9,81 m/s² · (3,0 s)² / 39,48 ≈ <b>2,24 m</b>. <span class='klein'>(Die Simulation rechnet ohne Kleinwinkelnäherung – deshalb misst sie ein paar Hundertstel mehr.)</span>",
     vorbereiten: () => { setze(Object.assign({}, KLAUSUR)); diagramm.achsen({ fenster: 31 }); sichtbar(["s"]); laufeBis(() => Z.n >= 10); } },
-  { text: "<b>4 c)</b> Im Diagramm: Amplitude <i>A</i> = 0,6 m, Schwingungsdauer <i>T</i> = 3,0 s. ω = 2π / 3,0 s ≈ 2,09 1/s. Bewegungsgesetz: <i>s</i>(<i>t</i>) = 0,6 m · sin(2,09 1/s · <i>t</i>). Die gestrichelte Rechnung liegt genau auf der „Messung“.",
-    vorbereiten: () => { presets[6].tun(); sichtbar(["s", "sth"]); laufeBis(() => Z.t >= 6.0); } },
-  { text: "<b>4 c)</b> Bei <i>t</i> = 0,5 s: <i>s</i> = 0,6 m · sin(2,09 · 0,5) = 0,6 m · sin(1,047) ≈ <b>0,52 m</b>. Taschenrechner auf RAD! Vergleiche mit der Messapp.",
-    vorbereiten: () => { presets[6].tun(); sichtbar(["s", "sth"]); laufeBis(() => Z.t >= 0.5 - 1e-9); } },
-  { text: "<b>4 d)</b> Die Geschwindigkeit ist die <b>Steigung</b> der <i>s</i>-<i>t</i>-Kurve. Am steilsten ist die Kurve in der Ruhelage (<i>s</i> = 0): Dort ist Liyana am schnellsten. Steigungsdreieck an der Tangente: 0,5 m in 0,4 s ⇒ <b>≈ 1,3 m/s ≈ 4,5 km/h</b> – Schrittgeschwindigkeit. Die rote <i>v</i>-Kurve ist dort am höchsten, an den Umkehrpunkten null.",
-    vorbereiten: () => { presets[6].tun(); sichtbar(["s", "v"]); laufeBis(() => Z.t >= 3.0 - 1e-9); } },
-  { text: "<b>4 e)</b> Liyana: „Fester schubsen – dann bin ich schneller wieder da!“ Mit <i>A</i> = 1,0 m (bunt) gegen 0,6 m (grau): Sie schwingt weiter und schneller, kommt aber <b>gleichzeitig</b> zurück. <i>T</i> hängt nicht von <i>A</i> ab.",
-    vorbereiten: () => { presets[7].tun(); sichtbar(["s", "vgl"]); laufeBis(() => Z.t >= 3.0 - 1e-9); } },
-  { text: "<b>4 e)</b> Sergej (85 kg) statt Liyana (22 kg, grau): Die Kurven liegen <b>aufeinander</b>. In <i>T</i> = 2π·√(<i>l</i>/<i>g</i>) kommt keine Masse vor – mehr Masse ist träger, wird aber auch stärker zurückgezogen.",
-    vorbereiten: () => { presets[8].tun(); sichtbar(["s", "vgl"]); laufeBis(() => Z.t >= 4.5 - 1e-9); } },
+  { text: "<b>5 c)</b> Im Diagramm: Amplitude <i>A</i> = 0,6 m, Schwingungsdauer <i>T</i> = 3,0 s. ω = 2π / 3,0 s ≈ 2,09 1/s. Bewegungsgesetz: <i>s</i>(<i>t</i>) = 0,6 m · sin(2,09 1/s · <i>t</i>). Die gestrichelte Rechnung liegt genau auf der „Messung“.",
+    vorbereiten: () => { presets[7].tun(); sichtbar(["s", "sth"]); laufeBis(() => Z.t >= 6.0); } },
+  { text: "<b>5 c)</b> Bei <i>t</i> = 0,5 s: <i>s</i> = 0,6 m · sin(2,09 · 0,5) = 0,6 m · sin(1,047) ≈ <b>0,52 m</b>. Taschenrechner auf RAD! Vergleiche mit der Messapp.",
+    vorbereiten: () => { presets[7].tun(); sichtbar(["s", "sth"]); laufeBis(() => Z.t >= 0.5 - 1e-9); } },
+  { text: "<b>5 d)</b> Die Geschwindigkeit ist die <b>Steigung</b> der <i>s</i>-<i>t</i>-Kurve. Am steilsten ist die Kurve in der Ruhelage (<i>s</i> = 0): Dort ist Liyana am schnellsten. Steigungsdreieck an der Tangente: 0,5 m in 0,4 s ⇒ <b>≈ 1,3 m/s ≈ 4,5 km/h</b> – Schrittgeschwindigkeit. Die rote <i>v</i>-Kurve ist dort am höchsten, an den Umkehrpunkten null.",
+    vorbereiten: () => { presets[7].tun(); sichtbar(["s", "v"]); laufeBis(() => Z.t >= 3.0 - 1e-9); } },
+  { text: "<b>5 e)</b> Liyana: „Fester schubsen – dann bin ich schneller wieder da!“ Mit <i>A</i> = 1,0 m (bunt) gegen 0,6 m (grau): Sie schwingt weiter und schneller, kommt aber <b>gleichzeitig</b> zurück. <i>T</i> hängt nicht von <i>A</i> ab.",
+    vorbereiten: () => { presets[8].tun(); sichtbar(["s", "vgl"]); laufeBis(() => Z.t >= 3.0 - 1e-9); } },
+  { text: "<b>5 e)</b> Sergej (85 kg) statt Liyana (22 kg, grau): Die Kurven liegen <b>aufeinander</b>. In <i>T</i> = 2π·√(<i>l</i>/<i>g</i>) kommt keine Masse vor – mehr Masse ist träger, wird aber auch stärker zurückgezogen.",
+    vorbereiten: () => { presets[9].tun(); sichtbar(["s", "vgl"]); laufeBis(() => Z.t >= 4.5 - 1e-9); } },
   { text: "<b>f), g)</b> Ohne Anschubsen: Die Amplitude halbiert sich in 30 s (Reibung, Luftwiderstand), die Schwingungsdauer bleibt 3,0 s. Für <i>T</i> ist das Modell sehr gut, für die Amplitude über längere Zeit nicht.",
-    vorbereiten: () => { presets[9].tun(); sichtbar(["s"]); laufeBis(() => Z.t >= 30 - 1e-9); } },
+    vorbereiten: () => { presets[10].tun(); sichtbar(["s"]); laufeBis(() => Z.t >= 30 - 1e-9); } },
   { text: "<b>h)</b> Richtig anschubsen: im Takt, also alle <i>T</i> = 3,0 s, am <b>hinteren Umkehrpunkt</b> in Bewegungsrichtung. Starte die Simulation! Probier dann selbst mit „Schubs!“: Was passiert, wenn Sergej zur falschen Zeit schubst?",
-    vorbereiten: () => { presets[10].tun(); sichtbar(["s"]); laufeBis(() => Z.t >= 9.0 - 1e-9); } },
+    vorbereiten: () => { presets[11].tun(); sichtbar(["s"]); laufeBis(() => Z.t >= 9.0 - 1e-9); } },
 ]);
 $("btnSchrittmodus").onclick = () => schritte.aktiv ? schritte.aus() : schritte.an();
 
