@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Papa, schubs mich an! – Schaukel als Fadenpendel</title>
+<!--
+  Simulation zur Klausuraufgabe „Papa, schubs mich an!“ (Q1 Physik GK, Fadenpendel am Beispiel Schaukel).
+  Zahlen wie in klausuren/latex/klausur_schaukel.tex: g = 9,81 m/s², l = 2,24 m, T = 3,0 s, ŝ = 0,6 m,
+  Liyana 22 kg, Sergej 85 kg, Dämpfung: Amplitude halbiert sich in 30 s.
+  Aufbau nach Sergeis Vorlage: BAUKASTEN (unverändert bis auf gestrichelte Kurven) + MODELL.
+  Eine Datei, offline, keine externen Einbindungen.
+-->
+<style>
+  :root {
+    --hg: #ffffff; --flaeche: #f4f6f9; --rand: #d5dbe3; --text: #1b2430; --text2: #5a6675;
+    --akzent: #1f5c99;
+    --e-pot: #1f77b4; --e-kin: #d95f02; --e-th: #7b3294; --e-ges: #2b2b2b;
+    --kurve1: #1f5c99; --kurve2: #c62828; --kurve3: #2e7d32;
+    --schrift: system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--flaeche); color: var(--text); font-family: var(--schrift);
+         font-size: 1rem; line-height: 1.4; }
+  body.gross { font-size: 1.25rem; }
+  header { display: flex; align-items: center; gap: .8em; padding: .5em 1em;
+           background: var(--akzent); color: #fff; flex-wrap: wrap; }
+  header h1 { font-size: 1.3em; margin: 0; font-weight: 600; flex: 1 1 auto; }
+  header button { background: rgba(255,255,255,.15); color: #fff; border-color: rgba(255,255,255,.4); }
+  main { display: grid; gap: .8em; padding: .8em;
+         grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+         grid-template-areas: "szene diagramm" "steuerung sinus" "regler balken" "info info"; }
+  @media (max-width: 900px) {
+    main { grid-template-columns: minmax(0, 1fr);
+           grid-template-areas: "szene" "steuerung" "diagramm" "sinus" "balken" "regler" "info"; }
+  }
+  .karte { background: var(--hg); border: 1px solid var(--rand); border-radius: 10px; padding: .7em; min-width: 0; }
+  .karte h2 { font-size: 1em; margin: 0 0 .4em; color: var(--text2); font-weight: 600; }
+  #szeneKarte { grid-area: szene; } #diagrammKarte { grid-area: diagramm; }
+  #balkenKarte { grid-area: balken; } #steuerKarte { grid-area: steuerung; }
+  #reglerKarte { grid-area: regler; } #infoKarte { grid-area: info; } #sinusKarte { grid-area: sinus; }
+  canvas { display: block; width: 100%; touch-action: none; }
+  #szene { height: 58vh; min-height: 300px; border-radius: 8px; }
+  #diagramm { height: 46vh; min-height: 220px; }
+  #balken { height: 190px; }
+  #sinusuhr { height: 240px; }
+  button { font: inherit; font-size: 1em; padding: .45em .9em; min-height: 2.6em; min-width: 2.6em;
+           border-radius: 8px; border: 1px solid var(--rand); background: var(--hg); color: var(--text); cursor: pointer; }
+  button:hover { border-color: var(--akzent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.haupt { background: var(--akzent); color: #fff; border-color: var(--akzent); font-weight: 600; }
+  button.aktiv { outline: 3px solid var(--akzent); outline-offset: 1px; }
+  button.schubs { background: #ffb300; border-color: #e69500; font-weight: 700; color: #3b2600; }
+  .zeile { display: flex; flex-wrap: wrap; gap: .5em; align-items: center; }
+  .messwerte { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5em, 1fr)); gap: .3em .8em;
+               margin-top: .6em; font-variant-numeric: tabular-nums; }
+  .messwerte div { background: var(--flaeche); border-radius: 6px; padding: .25em .5em; }
+  .messwerte b { font-weight: 600; }
+  .regler { display: grid; grid-template-columns: repeat(auto-fit, minmax(14em, 1fr)); gap: .6em 1.4em; }
+  .regler label { display: block; font-weight: 600; }
+  .regler .wert { float: right; font-weight: 400; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; height: 2.2em; accent-color: var(--akzent); }
+  .presets { margin-top: .7em; }
+  .presets b { margin-right: .2em; }
+  #schritte { display: none; margin-top: .6em; padding: .6em .8em; border-left: 5px solid var(--akzent);
+              background: #eef4fb; border-radius: 6px; }
+  #schritte.an { display: block; }
+  #schrittText { font-size: 1.1em; margin: .2em 0 .5em; }
+  details summary { cursor: pointer; font-weight: 600; }
+  .klein { color: var(--text2); font-size: .85em; }
+  kbd { border: 1px solid var(--rand); border-bottom-width: 2px; border-radius: 4px; padding: 0 .3em;
+        font-size: .85em; background: var(--flaeche); }
+  .formeln { font-variant-numeric: tabular-nums; margin-top: .4em; line-height: 1.8; }
+  .formeln div { padding: 0 .4em; border-radius: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Papa, schubs mich an! – die Schaukel als Fadenpendel</h1>
+  <button id="btnGross" title="Große Schrift für den Beamer (G)">Beamer-Ansicht</button>
+  <button id="btnVoll" title="Vollbild (F)">Vollbild</button>
+</header>
+
+<main>
+  <section class="karte" id="szeneKarte">
+    <h2>Spielplatz</h2>
+    <canvas id="szene" aria-label="Animation: Sergej schubst Liyana auf der Schaukel"></canvas>
+    <p class="klein">Tipp: Während die Schaukel läuft, in die Szene tippen (oder Taste <kbd>S</kbd>) – dann schubst Sergej. Probier aus, wann es hilft und wann es bremst!</p>
+  </section>
+
+  <section class="karte" id="diagrammKarte">
+    <h2>Messapp: Diagramm (mitlaufend)</h2>
+    <canvas id="diagramm" aria-label="Diagramm"></canvas>
+    <div class="zeile" id="kurvenwahl"></div>
+  </section>
+
+  <section class="karte" id="steuerKarte">
+    <div class="zeile">
+      <button id="btnStart" class="haupt" title="Start/Pause (Leertaste)">▶ Start</button>
+      <button id="btnSchritt" title="Einzelschritt (→)">Einzelschritt</button>
+      <button id="btnReset" title="Zurücksetzen (R)">↺ Zurücksetzen</button>
+      <button id="btnLangsam" title="Zeitlupe umschalten (L)">Zeitlupe: aus</button>
+      <button id="btnSchubs" class="schubs" title="Sergej schubst (S)">👐 Schubs!</button>
+    </div>
+    <div class="zeile presets">
+      <button id="btnModell" title="Modell-Brille (M)">🤓 Modell-Brille</button>
+      <button id="btnPfeile" class="aktiv">Pfeile s, v</button>
+      <button id="btnReib">Reibung: aus</button>
+      <button id="btnTakt">Papa schubst im Takt: aus</button>
+    </div>
+    <div class="messwerte" id="messwerte"></div>
+    <div id="schritte">
+      <div class="zeile" style="justify-content:space-between">
+        <b id="schrittNr"></b>
+        <span class="zeile"><button id="btnZurueck">◀ zurück</button><button id="btnWeiter" class="haupt">weiter ▶</button></span>
+      </div>
+      <div id="schrittText"></div>
+    </div>
+  </section>
+
+  <section class="karte" id="sinusKarte">
+    <h2>Sinusuhr: vom Bewegungsgesetz zu <i>v</i>(<i>t</i>) und <i>a</i>(<i>t</i>)</h2>
+    <canvas id="sinusuhr" aria-label="Sinusuhr"></canvas>
+    <div class="formeln" id="formeln"></div>
+  </section>
+
+  <section class="karte" id="balkenKarte">
+    <h2>Energie</h2>
+    <canvas id="balken" aria-label="Energiebalken"></canvas>
+  </section>
+
+  <section class="karte" id="reglerKarte">
+    <h2>Einstellungen</h2>
+    <div class="regler" id="regler"></div>
+    <div class="zeile presets" id="presets"><b>Klausur:</b></div>
+    <div class="zeile presets">
+      <button id="btnSchrittmodus">Klausur Schritt für Schritt besprechen</button>
+      <button id="btnCSV" title="Messwerte als Tabelle speichern">Messwerte speichern (CSV)</button>
+      <button id="btnPNG" title="Bild von Szene und Diagramm speichern">Bild speichern (PNG)</button>
+    </div>
+  </section>
+
+  <section class="karte" id="infoKarte">
+    <details>
+      <summary>Was wird hier simuliert?</summary>
+      <div id="infoText"></div>
+    </details>
+    <p class="klein">Tastatur: <kbd>Leertaste</kbd> Start/Pause · <kbd>S</kbd> Schubs · <kbd>R</kbd> Zurücksetzen ·
+      <kbd>→</kbd> Einzelschritt · <kbd>L</kbd> Zeitlupe · <kbd>M</kbd> Modell-Brille · <kbd>G</kbd> Beamer-Ansicht · <kbd>F</kbd> Vollbild</p>
+  </section>
+</main>
+
+<script>
+"use strict";
+/* =====================================================================
+   BAUKASTEN – aus Sergeis Vorlage (einzige Ergänzung: gestrichelte Kurven im Diagramm)
+   ===================================================================== */
+/* =====================================================================
+   BAUKASTEN – allgemein verwendbar, in neuen Simulationen unverändert lassen
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+/** Schriftgröße auf der Leinwand – wächst in der Beamer-Ansicht mit */
+const fs = px => Math.round(px * (document.body.classList.contains("gross") ? 1.3 : 1));
+
+/** Zahl deutsch formatieren: fmt(1.234, 2, "m") -> "1,23 m" */
+function fmt(x, stellen = 2, einheit = "") {
+  if (!isFinite(x)) return "–";
+  const s = x.toLocaleString("de-DE", { minimumFractionDigits: stellen, maximumFractionDigits: stellen });
+  return einheit ? s + " " + einheit : s;
+}
+
+/** Canvas mit scharfer Darstellung (HiDPI). Liefert {ctx, b, h} in CSS-Pixeln, passt sich an. */
+function leinwand(canvas, beiGroesse) {
+  const obj = { canvas, ctx: canvas.getContext("2d"), b: 0, h: 0 };
+  const anpassen = (melden = true) => {
+    const r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    obj.b = Math.max(1, r.width); obj.h = Math.max(1, r.height);
+    canvas.width = Math.round(obj.b * dpr); canvas.height = Math.round(obj.h * dpr);
+    obj.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (melden && beiGroesse) beiGroesse();
+  };
+  anpassen(false);                       // Größe sofort setzen, Neuzeichnen erst bei Änderungen
+  new ResizeObserver(() => anpassen()).observe(canvas);
+  return obj;
+}
+
+/** Pfeil zeichnen (für Kräfte, Geschwindigkeiten, Maße) */
+function pfeil(ctx, x1, y1, x2, y2, farbe, breite = 3, spitze = 12) {
+  const w = Math.atan2(y2 - y1, x2 - x1), l = Math.hypot(x2 - x1, y2 - y1);
+  if (l < 1) return;
+  const s = Math.min(spitze, l * 0.6);
+  ctx.save(); ctx.strokeStyle = ctx.fillStyle = farbe; ctx.lineWidth = breite; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - s * 0.7 * Math.cos(w), y2 - s * 0.7 * Math.sin(w)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - s * Math.cos(w - 0.4), y2 - s * Math.sin(w - 0.4));
+  ctx.lineTo(x2 - s * Math.cos(w + 0.4), y2 - s * Math.sin(w + 0.4)); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+/** Text mit Hintergrund (gut lesbar über Linien) */
+function beschriftung(ctx, text, x, y, { farbe = "#1b2430", groesse = 15, ausrichtung = "center",
+                                        grundlinie = "middle", fett = false, hintergrund = true } = {}) {
+  ctx.save(); groesse = fs(groesse); ctx.font = `${fett ? "600 " : ""}${groesse}px ${css("--schrift")}`;
+  ctx.textAlign = ausrichtung; ctx.textBaseline = grundlinie;
+  const m = ctx.measureText(text), pad = 3;
+  let x0 = ausrichtung === "center" ? x - m.width / 2 : ausrichtung === "right" ? x - m.width : x;
+  if (hintergrund) { ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.fillRect(x0 - pad, y - groesse * 0.6 - pad, m.width + 2 * pad, groesse * 1.2 + 2 * pad); }
+  ctx.fillStyle = farbe; ctx.fillText(text, x, y); ctx.restore();
+}
+
+/** "Schöne" Achsenteilung */
+function teilung(min, max, ziel = 6) {
+  const roh = (max - min) / ziel, p = Math.pow(10, Math.floor(Math.log10(roh)));
+  const f = roh / p, schritt = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
+  const t = []; for (let v = Math.ceil(min / schritt) * schritt; v <= max + 1e-9 * schritt; v += schritt) t.push(v);
+  return { t, schritt, stellen: Math.max(0, -Math.floor(Math.log10(schritt) + 1e-9)) };
+}
+
+/**
+ * Live-Diagramm (Zeitreihen). Beispiel:
+ *   const d = new Diagramm(canvas, {xName:"t", xEinheit:"s", yName:"x", yEinheit:"m", fenster:10});
+ *   d.reihe("x", "Auslenkung", "#1f5c99");  d.punkt("x", t, x);  d.zeichnen();
+ * fenster = sichtbare Zeitspanne (mitlaufend); yMin/yMax fest oder automatisch.
+ */
+class Diagramm {
+  constructor(canvas, opt) {
+    this.o = Object.assign({ xName: "t", xEinheit: "s", yName: null, yEinheit: "", fenster: 10,
+                             yMin: null, yMax: null }, opt);
+    this.reihen = new Map(); this.lw = leinwand(canvas, () => this.zeichnen());
+  }
+  /** name = Text für den Knopf, achse = Achsenbeschriftung, z. B. "s in cm" */
+  reihe(id, name, farbe, sichtbar = true, achse = name, strich = null) { this.reihen.set(id, { name, farbe, sichtbar, achse, strich, d: [] }); }
+  punkt(id, x, y) { const r = this.reihen.get(id); r.d.push([x, y]); if (r.d.length > 20000) r.d.splice(0, 5000); }
+  leeren() { for (const r of this.reihen.values()) r.d = []; }
+  achsen(opt) { Object.assign(this.o, opt); }
+  zeichnen() {
+    const { ctx, b, h } = this.lw, o = this.o, R = { l: 62, r: 14, o: 18, u: 46 };
+    ctx.clearRect(0, 0, b, h);
+    const sicht = [...this.reihen.values()].filter(r => r.sichtbar);
+    let xMax = 0; for (const r of sicht) if (r.d.length) xMax = Math.max(xMax, r.d[r.d.length - 1][0]);
+    const x1 = Math.max(o.fenster, xMax), x0 = x1 - o.fenster;
+    let y0 = o.yMin, y1 = o.yMax;
+    if (y0 === null || y1 === null) {
+      let lo = Infinity, hi = -Infinity;
+      for (const r of sicht) for (const [x, y] of r.d) if (x >= x0) { lo = Math.min(lo, y); hi = Math.max(hi, y); }
+      if (!isFinite(lo)) { lo = -1; hi = 1; }
+      if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+      const rand = 0.1 * (hi - lo);
+      if (y0 === null) y0 = lo - rand; if (y1 === null) y1 = hi + rand;
+    }
+    const X = x => R.l + (x - x0) / (x1 - x0) * (b - R.l - R.r);
+    const Y = y => h - R.u - (y - y0) / (y1 - y0) * (h - R.o - R.u);
+    ctx.font = `${fs(13)}px ${css("--schrift")}`; ctx.lineWidth = 1;
+    const tx = teilung(x0, x1, Math.max(3, Math.floor(b / 90))), ty = teilung(y0, y1, Math.max(3, Math.floor(h / 55)));
+    ctx.strokeStyle = "#e3e7ec"; ctx.fillStyle = "#5a6675";
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (const v of tx.t) { ctx.beginPath(); ctx.moveTo(X(v), R.o); ctx.lineTo(X(v), h - R.u); ctx.stroke();
+                            ctx.fillText(fmt(v, tx.stellen), X(v), h - R.u + 5); }
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (const v of ty.t) { ctx.beginPath(); ctx.moveTo(R.l, Y(v)); ctx.lineTo(b - R.r, Y(v)); ctx.stroke();
+                            ctx.fillText(fmt(v, ty.stellen), R.l - 6, Y(v)); }
+    // Achsen (Nulllinie hervorheben)
+    ctx.strokeStyle = "#1b2430"; ctx.lineWidth = 1.5; ctx.beginPath();
+    const yNull = (y0 < 0 && y1 > 0) ? Y(0) : h - R.u;
+    ctx.moveTo(R.l, yNull); ctx.lineTo(b - R.r, yNull); ctx.moveTo(R.l, R.o); ctx.lineTo(R.l, h - R.u); ctx.stroke();
+    ctx.fillStyle = "#1b2430"; ctx.font = `600 ${fs(14)}px ${css("--schrift")}`;
+    ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+    ctx.fillText(`${o.xName} in ${o.xEinheit}`, b - R.r, h - 4);
+    ctx.save(); ctx.translate(14, R.o); ctx.rotate(-Math.PI / 2); ctx.textAlign = "right"; ctx.textBaseline = "top";
+    const yText = o.yName ? (o.yEinheit ? `${o.yName} in ${o.yEinheit}` : o.yName) : sicht.map(r => r.achse).join(",  ");
+    ctx.fillText(yText, 0, 0); ctx.restore();
+    // Kurven
+    ctx.save(); ctx.beginPath(); ctx.rect(R.l, R.o, b - R.l - R.r, h - R.o - R.u); ctx.clip();
+    for (const r of sicht) {
+      ctx.strokeStyle = r.farbe; ctx.lineWidth = 2.5; ctx.setLineDash(r.strich || []); ctx.beginPath(); let an = false;
+      for (const [x, y] of r.d) { if (x < x0 - 1e-9) continue; an ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)); an = true; }
+      ctx.stroke();
+      if (r.d.length) { const [x, y] = r.d[r.d.length - 1]; ctx.fillStyle = r.farbe;
+                        ctx.beginPath(); ctx.arc(X(x), Y(y), 4.5, 0, 7); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+  /** Knöpfe zum Ein-/Ausblenden der Kurven in ein Element einfügen */
+  auswahl(el) {
+    el.innerHTML = "";
+    for (const [id, r] of this.reihen) {
+      const k = document.createElement("button");
+      k.innerHTML = `<span style="color:${r.farbe}">${r.strich ? "╍╍" : "━━"}</span> ${r.name}`;
+      k.classList.toggle("aktiv", r.sichtbar);
+      k.onclick = () => { r.sichtbar = !r.sichtbar; k.classList.toggle("aktiv", r.sichtbar); this.zeichnen(); };
+      el.appendChild(k);
+    }
+  }
+}
+
+/**
+ * Energiebalken. Beispiel:
+ *   const eb = new Balken(canvas, [{id:"pot", name:"E_Spann", farbe:css("--e-pot")}, ...], "J");
+ *   eb.zeichnen({pot: 0.2, kin: 0.1, ges: 0.3}, maxWert);
+ */
+class Balken {
+  constructor(canvas, arten, einheit = "J") { this.arten = arten; this.einheit = einheit;
+    this.lw = leinwand(canvas, () => this.letzte && this.zeichnen(...this.letzte)); }
+  zeichnen(werte, max) {
+    this.letzte = [werte, max];
+    const { ctx, b, h } = this.lw, n = this.arten.length, R = { l: 10, r: 10, o: 26, u: 30 };
+    ctx.clearRect(0, 0, b, h);
+    const bw = (b - R.l - R.r) / n, H = h - R.o - R.u, sk = max > 0 ? H / max : 0;
+    ctx.strokeStyle = "#1b2430"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(R.l, h - R.u); ctx.lineTo(b - R.r, h - R.u); ctx.stroke();
+    this.arten.forEach((a, i) => {
+      const v = Math.max(0, werte[a.id] || 0), x = R.l + i * bw + bw * 0.18, w = bw * 0.64;
+      ctx.fillStyle = a.farbe; ctx.fillRect(x, h - R.u - v * sk, w, v * sk);
+      ctx.font = `600 ${fs(14)}px ${css("--schrift")}`; ctx.fillStyle = "#1b2430"; ctx.textAlign = "center";
+      ctx.textBaseline = "top"; ctx.fillText(a.name, x + w / 2, h - R.u + 6);
+      ctx.textBaseline = "bottom"; ctx.font = `${fs(13)}px ${css("--schrift")}`;
+      ctx.fillText(fmt(werte[a.id] || 0, a.stellen ?? 2, this.einheit), x + w / 2, Math.max(R.o + 2, h - R.u - v * sk - 4));
+    });
+  }
+}
+
+/** Regler erzeugen. Liefert Objekt mit .wert; ruft beiAenderung(wert) auf. */
+function regler(container, { id, name, min, max, schritt, wert, einheit = "", stellen = 2, beiAenderung }) {
+  const box = document.createElement("div");
+  box.innerHTML = `<label for="r_${id}">${name} <span class="wert" id="w_${id}"></span></label>
+                   <input type="range" id="r_${id}" min="${min}" max="${max}" step="${schritt}" value="${wert}">`;
+  container.appendChild(box);
+  const inp = box.querySelector("input"), anz = box.querySelector(".wert");
+  const r = { get wert() { return parseFloat(inp.value); },
+              setzen(v) { inp.value = v; anz.textContent = fmt(parseFloat(inp.value), stellen, einheit); },
+              sperren(an) { inp.disabled = an; } };
+  r.setzen(wert);
+  inp.addEventListener("input", () => { anz.textContent = fmt(r.wert, stellen, einheit); beiAenderung && beiAenderung(r.wert); });
+  return r;
+}
+
+/** Datei aus der Seite heraus speichern (funktioniert offline) */
+function speichern(name, inhalt, typ) {
+  const a = document.createElement("a");
+  a.href = typeof inhalt === "string" ? URL.createObjectURL(new Blob([inhalt], { type: typ })) : inhalt;
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+
+/** Mehrere Canvas nebeneinander als ein PNG speichern */
+function alsPNG(name, canvasListe) {
+  const b = canvasListe.reduce((s, c) => s + c.width, 0), h = Math.max(...canvasListe.map(c => c.height));
+  const z = document.createElement("canvas"); z.width = b; z.height = h;
+  const ctx = z.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, b, h);
+  let x = 0; for (const c of canvasListe) { ctx.drawImage(c, x, 0); x += c.width; }
+  speichern(name, z.toDataURL("image/png"));
+}
+
+/**
+ * Simulationsschleife mit festem Zeitschritt (physikalisch sauber, unabhängig von der Bildrate).
+ *   const lauf = new Schleife({dt: 0.001, schritt: dt => {...}, bild: () => {...}});
+ *   lauf.start(); lauf.pause(); lauf.tempo = 0.2 (Zeitlupe)
+ */
+class Schleife {
+  constructor({ dt, schritt, bild, beiStatus }) {
+    Object.assign(this, { dt, schritt, bild, beiStatus, laeuft: false, tempo: 1, rest: 0, tAlt: 0 });
+    const tick = tJetzt => {
+      if (this.laeuft) {
+        let echt = Math.min(0.1, (tJetzt - this.tAlt) / 1000);   // nach Tab-Wechsel nicht springen
+        this.rest += echt * this.tempo;
+        let n = 0; while (this.rest >= this.dt && n < 20000) { this.schritt(this.dt); this.rest -= this.dt; n++; }
+      }
+      this.tAlt = tJetzt; this.bild(); requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  start() { this.laeuft = true; this.beiStatus && this.beiStatus(true); }
+  pause() { this.laeuft = false; this.beiStatus && this.beiStatus(false); }
+  umschalten() { this.laeuft ? this.pause() : this.start(); }
+  einzelschritt(dauer) { this.pause(); const n = Math.round(dauer / this.dt); for (let i = 0; i < n; i++) this.schritt(this.dt); }
+}
+
+/**
+ * Schritt-für-Schritt-Modus zum Besprechen im Plenum.
+ *   schrittmodus([{text:"…", vorbereiten: () => {...}}, ...])
+ */
+function schrittmodus(schritte) {
+  let i = 0; const box = $("schritte");
+  const zeigen = () => { $("schrittNr").textContent = `Schritt ${i + 1} von ${schritte.length}`;
+    $("schrittText").innerHTML = schritte[i].text; schritte[i].vorbereiten && schritte[i].vorbereiten();
+    $("btnZurueck").disabled = i === 0; $("btnWeiter").disabled = i === schritte.length - 1; };
+  $("btnZurueck").onclick = () => { if (i > 0) { i--; zeigen(); } };
+  $("btnWeiter").onclick = () => { if (i < schritte.length - 1) { i++; zeigen(); } };
+  return { an() { box.classList.add("an"); i = 0; zeigen(); }, aus() { box.classList.remove("an"); },
+           get aktiv() { return box.classList.contains("an"); } };
+}
+
+/** Vollbild, Beamer-Ansicht, Tastatur */
+function bedienungEinrichten(lauf, { reset, einzel }) {
+  $("btnVoll").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  $("btnGross").onclick = () => { document.body.classList.toggle("gross"); $("btnGross").classList.toggle("aktiv"); };
+  $("btnStart").onclick = () => lauf.umschalten();
+  $("btnReset").onclick = reset;
+  $("btnSchritt").onclick = einzel;
+  $("btnLangsam").onclick = () => { lauf.tempo = lauf.tempo === 1 ? 0.2 : 1;
+    $("btnLangsam").textContent = `Zeitlupe: ${lauf.tempo === 1 ? "aus" : "an (×0,2)"}`;
+    $("btnLangsam").classList.toggle("aktiv", lauf.tempo !== 1); };
+  lauf.beiStatus = an => { $("btnStart").textContent = an ? "❚❚ Pause" : "▶ Start"; };
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT" && e.key !== " ") return;
+    const k = e.key.toLowerCase();
+    if (k === " ") { e.preventDefault(); lauf.umschalten(); }
+    else if (k === "r") reset(); else if (k === "arrowright") einzel();
+    else if (k === "l") $("btnLangsam").click(); else if (k === "g") $("btnGross").click();
+    else if (k === "f") $("btnVoll").click();
+  });
+}
+
+/* =====================================================================
+   MODELL – Schaukel als Fadenpendel (Klausur „Papa, schubs mich an!“)
+   Physik:  φ'' = −(g/l)·sin φ − β·φ'     (exakt mit sin φ, keine Kleinwinkelnäherung)
+            s = l·φ (Bogen entlang der Bahn, nach vorn positiv), v = l·φ', a = l·φ''
+   Dämpfung (Taste „Reibung“): β = 2·ln2 / 30 s  →  Amplitude halbiert sich in 30 s (wie Klausur f)
+   Start: t = 0 in der Ruhelage, Schubs nach vorn mit v₀ so, dass die Amplitude ŝ erreicht wird.
+   Integration: Velocity-Verlet mit dt = 1 ms
+   ===================================================================== */
+const G = 9.81, DT = 0.001, SCHUB_A = 1.5, BETA_REIB = 2 * Math.LN2 / 30;
+const P = { l: 2.24, s0: 0.6, m: 22, reib: false, takt: false, stopNach: 0, modell: false, pfeile: true };
+const KLAUSUR = { l: 2.24, s0: 0.6, m: 22 };
+let Z = null;                 // Hauptschaukel
+let VG = null;                // Vergleichsschaukel (grau, durchsichtig) oder null
+let sprech = {};              // Sprechblasen {wer: {text, bis}}
+let spruchNr = 0;
+const messreihe = [];
+
+const beta = () => P.reib ? BETA_REIB : 0;
+const omegaFormel = l => Math.sqrt(G / l);                       // ω = 2π/T mit T = 2π·√(l/g)
+const TFormel = l => 2 * Math.PI * Math.sqrt(l / G);
+const istPapa = m => m >= 50;                                    // ab 50 kg sitzt Sergej auf der Schaukel
+
+function neuerZustand(l, s0) {
+  const phiMax = s0 / l, v0 = Math.sqrt(2 * G * l * (1 - Math.cos(phiMax)));
+  return { t: 0, k: 0, phi: 0, om: v0 / l, acc: 0, Einnen: 0, Eschubs: 0, n: 0, tLetzt: 0,
+           schubsBis: 0.35, danebenBis: -1, druckBis: 0, geschubst: false, E0: 0.5 * v0 * v0 };
+}
+
+function schritt(z, l, b, m) {                                   // Velocity-Verlet
+  const a = -(G / l) * Math.sin(z.phi) - b * z.om;
+  const phiN = z.phi + z.om * DT + 0.5 * a * DT * DT;
+  const omH = z.om + 0.5 * a * DT;
+  const aN = -(G / l) * Math.sin(phiN) - b * omH;
+  const omN = z.om + 0.5 * (a + aN) * DT;
+  z.Einnen += m * l * l * b * (0.5 * (z.om + omN)) ** 2 * DT;
+  const ereignis = { durchgang: z.phi < 0 && phiN >= 0 && omN > 0,
+                     hinten: z.om < 0 && omN >= 0 && phiN < 0 };
+  if (ereignis.durchgang) { z.n++; z.tLetzt = z.t + DT * (-z.phi / (phiN - z.phi)); }
+  z.phi = phiN; z.om = omN; z.acc = aN * l; z.t += DT; z.k++;
+  return ereignis;
+}
+
+function physikSchritt() {
+  const e = schritt(Z, P.l, beta(), P.m);
+  if (VG) schritt(VG.z, VG.l, beta(), VG.m);
+  if (e.hinten) amHinterenUmkehrpunkt();
+  if (P.takt && Z.t < Z.druckBis) {            // Papa drückt mit konstanter Kraft, bis Liyana wieder ŝ erreichen kann
+    const ziel = G * P.l * (1 - Math.cos(P.s0 / P.l)), jetzt = G * P.l * (1 - Math.cos(Z.phi)) + 0.5 * (P.l * Z.om) ** 2;
+    if (jetzt < ziel) Z.om += SCHUB_A * DT / P.l; else Z.druckBis = 0;
+  }
+  if (Z.k % 20 === 0) aufzeichnen();
+  if (P.stopNach && e.durchgang && Z.n >= P.stopNach) {
+    lauf.pause();
+    sag("schieber", `${P.stopNach} Schwingungen in ${fmt(Z.tLetzt, 1, "s")} → T = ${fmt(Z.tLetzt / Z.n, 2, "s")}!`, 99);
+  }
+}
+
+/* Sergej schubst: Impuls nach vorn (Δv > 0) */
+function schubsen(dv) {
+  Z.om += dv / P.l; Z.Eschubs += 0; Z.geschubst = true; Z.schubsBis = Z.t + 0.35;
+}
+
+function amHinterenUmkehrpunkt() {
+  // Im Takt schubsen: genau so viel Energie zurückgeben, dass Liyana wieder ŝ erreicht
+  if (P.takt) { Z.druckBis = Z.t + 0.6; Z.schubsBis = Z.t + 0.6; Z.geschubst = true; }
+  spruchNr++;
+  const papa = istPapa(P.m), amp = Math.abs(Z.phi) * P.l;
+  let reiter, schieber;
+  if (papa) {
+    reiter = ["Huiii! 85 kg – und trotzdem T = 3 s!", "Ich bin gar nicht langsamer!", "Die Masse kürzt sich raus!"];
+    schieber = ["Papa, du bist sooo schwer!", "Hau ruck!", "Jetzt bin ICH dran!"];
+  } else if (P.reib && !P.takt && amp < 0.8 * P.s0) {
+    reiter = ["Papa, ich werde immer niedriger!", "Hallo?! Nicht rechnen – SCHUBSEN!", "Papaaa!"];
+    schieber = ["Die Amplitude nimmt ab …", "… aber T bleibt 3 s. Faszinierend!", "Gedämpfte Schwingung!"];
+  } else if (P.takt) {
+    reiter = ["Immer gleich hoch – super!", "Wiiiii!", "Danke, Papa!"];
+    schieber = ["Hinterer Umkehrpunkt – SCHUBS!", "Immer im Takt T = 3 s!", "Resonanz, mein Schatz!"];
+  } else if (P.s0 > 0.8) {
+    reiter = ["Ich fliiiege!", "Weiter – aber nicht länger!", "Höher, Papa!"];
+    schieber = ["Größere Amplitude …", "… gleiche Schwingungsdauer!", "T hängt nicht von ŝ ab!"];
+  } else {
+    reiter = ["Wiiiii!", "Höher, Papa!", "Papa, nicht rechnen – schubsen!", "Juhuu!"];
+    schieber = ["Ein Fadenpendel – wunderschön!", "Genau 3 Sekunden. Herrlich!", "T = 2π·√(l/g)"];
+  }
+  const i = Math.floor(spruchNr / 2) % 3;
+  if (spruchNr % 2) sag("reiter", reiter[i % reiter.length]); else sag("schieber", schieber[i]);
+}
+
+function sag(wer, text, dauer = 2.4) { sprech[wer] = { text, bis: Z.t + dauer }; }
+
+const energie = () => {
+  const h = P.l * (1 - Math.cos(Z.phi)), v = P.l * Z.om;
+  const pot = P.m * G * h, kin = 0.5 * P.m * v * v;
+  return { pot, kin, th: Z.Einnen, ges: pot + kin + Z.Einnen, h };
+};
+
+function aufzeichnen() {
+  const s = P.l * Z.phi, v = P.l * Z.om, E = energie();
+  diagramm.punkt("s", Z.t, s);
+  if (!P.reib && !Z.geschubst) diagramm.punkt("sth", Z.t, P.s0 * Math.sin(omegaFormel(P.l) * Z.t));
+  diagramm.punkt("v", Z.t, v);
+  diagramm.punkt("a", Z.t, Z.acc);
+  if (VG) diagramm.punkt("vgl", Z.t, VG.l * VG.z.phi);
+  messreihe.push([Z.t, s, v, Z.acc, E.pot, E.kin, E.th]);
+}
+
+/* ---------- Figuren (gezeichnet in Metern; Blickrichtung nach rechts = nach vorn) ---------- */
+const FARBE = {
+  haut: "#f3c9a8", hautRand: "#c98e6b",
+  kind: { haare: "#4a2a17", oben: "#ff6b6b", punkte: "#fff", beine: "#7e57c2", schuh: "#e53935" },
+  papa: { haare: "#5b3a24", oben: "#26a69a", punkte: null, beine: "#3f5f8f", schuh: "#4e342e" }
+};
+const klemm = (x, a, b) => Math.max(a, Math.min(b, x));
+
+function strich(ctx, pts, farbe, breite) {
+  ctx.strokeStyle = farbe; ctx.lineWidth = breite; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.stroke();
+}
+function kreis(ctx, x, y, r, farbe) { ctx.fillStyle = farbe; ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill(); }
+
+/** Kopf (Blick nach rechts). typ "kind" oder "papa"; freude 0…1; zopf = Winkel der Zöpfe */
+function kopf(ctx, x, y, r, typ, freude, zopf = 0, blinzeln = false) {
+  const f = FARBE[typ];
+  if (typ === "kind") {                       // Zopf hinten (fliegt bei Beschleunigung)
+    ctx.save(); ctx.translate(x - 0.8 * r, y - 0.15 * r); ctx.rotate(0.5 + zopf);
+    ctx.fillStyle = f.haare; ctx.beginPath(); ctx.ellipse(-0.55 * r, 0, 0.55 * r, 0.3 * r, 0, 0, 7); ctx.fill();
+    kreis(ctx, -1.05 * r, 0, 0.22 * r, f.haare);
+    kreis(ctx, -0.05 * r, 0, 0.14 * r, "#ffd54f");   // Haargummi
+    ctx.restore();
+  }
+  kreis(ctx, x - 0.08 * r, y - 0.1 * r, 1.02 * r, f.haare);               // Haare (Hinterkopf)
+  kreis(ctx, x + 0.08 * r, y + 0.08 * r, 0.9 * r, FARBE.haut);            // Gesicht
+  kreis(ctx, x - 0.2 * r, y + 0.12 * r, 0.2 * r, FARBE.haut);             // Ohr
+  ctx.strokeStyle = FARBE.hautRand; ctx.lineWidth = 0.05 * r;
+  ctx.beginPath(); ctx.arc(x - 0.2 * r, y + 0.12 * r, 0.1 * r, 0.5, 5); ctx.stroke();
+  if (typ === "kind") {                        // Pony
+    ctx.fillStyle = f.haare; ctx.beginPath(); ctx.ellipse(x + 0.35 * r, y - 0.62 * r, 0.6 * r, 0.25 * r, 0.25, 0, 7); ctx.fill();
+  } else {                                     // Stoppelbart
+    ctx.fillStyle = "rgba(91,58,36,.35)"; ctx.beginPath();
+    ctx.arc(x + 0.15 * r, y + 0.15 * r, 0.82 * r, 0.15, 2.3); ctx.closePath(); ctx.fill();
+  }
+  // Augen
+  const ay = y - 0.05 * r;
+  for (const ax of [x + 0.3 * r, x + 0.68 * r]) {
+    if (freude > 0.75 || blinzeln) {
+      ctx.strokeStyle = "#222"; ctx.lineWidth = 0.07 * r; ctx.beginPath(); ctx.arc(ax, ay + 0.05 * r, 0.12 * r, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+    } else { kreis(ctx, ax, ay, 0.11 * r, "#222"); kreis(ctx, ax + 0.04 * r, ay - 0.04 * r, 0.04 * r, "#fff"); }
+  }
+  if (typ === "papa") {                        // Brille
+    ctx.strokeStyle = "#222"; ctx.lineWidth = 0.06 * r;
+    for (const ax of [x + 0.3 * r, x + 0.68 * r]) { ctx.beginPath(); ctx.arc(ax, ay, 0.2 * r, 0, 7); ctx.stroke(); }
+    strich(ctx, [[x + 0.1 * r, ay - 0.02 * r], [x - 0.15 * r, ay - 0.05 * r]], "#222", 0.05 * r);
+  }
+  kreis(ctx, x + 0.2 * r, y + 0.3 * r, 0.14 * r, "rgba(255,120,120,.45)");   // Wange
+  // Nase
+  ctx.fillStyle = "#e9b291"; ctx.beginPath(); ctx.ellipse(x + 0.95 * r, y + 0.12 * r, 0.11 * r, 0.09 * r, 0, 0, 7); ctx.fill();
+  // Mund
+  const mx = x + 0.55 * r, my = y + 0.42 * r;
+  if (freude > 0.45) {
+    ctx.fillStyle = "#8e1b1b"; ctx.beginPath(); ctx.arc(mx, my - 0.04 * r, 0.22 * r, 0, Math.PI); ctx.closePath(); ctx.fill();
+    kreis(ctx, mx, my + 0.08 * r, 0.09 * r, "#ff8a80");
+  } else {
+    ctx.strokeStyle = "#8e1b1b"; ctx.lineWidth = 0.07 * r; ctx.beginPath(); ctx.arc(mx, my - 0.1 * r, 0.18 * r, 0.3, Math.PI - 0.3); ctx.stroke();
+  }
+}
+
+/** Sitzende Person auf dem Brett; Koordinaten relativ zur Brettoberseite, Kette bei x = 0 nach oben */
+function sitzend(ctx, typ, vn, zopf) {
+  const f = FARBE[typ], dick = typ === "papa" ? 1.15 : 1;
+  const lehne = -0.3 * vn, rx = Math.sin(lehne), ry = -Math.cos(lehne);
+  const H = [-0.05, -0.06], S = [H[0] + 0.33 * rx, H[1] + 0.33 * ry], K = [H[0] + 0.27, H[1] + 0.01];
+  const bein = 0.45 + 0.75 * vn, Fu = [K[0] + 0.25 * Math.sin(bein), K[1] + 0.25 * Math.cos(bein)];
+  const hand = [0.0, S[1] - 0.05];
+  const ell = (A, B, aus) => [(A[0] + B[0]) / 2 + aus, (A[1] + B[1]) / 2 + 0.04];
+  // hinteres Bein und Arm (dunkler)
+  const bein2 = bein + 0.25, Fu2 = [K[0] + 0.02 + 0.25 * Math.sin(bein2), K[1] + 0.25 * Math.cos(bein2)];
+  strich(ctx, [H, [K[0] + 0.02, K[1]], Fu2], shade(f.beine), 0.075 * dick);
+  schuh(ctx, Fu2, bein2, shade(f.schuh));
+  strich(ctx, [S, ell(S, hand, 0.08), [hand[0] - 0.02, hand[1]]], shade(FARBE.haut), 0.05 * dick);
+  // Oberkörper
+  strich(ctx, [H, S], f.oben, 0.17 * dick);
+  if (f.punkte) for (const t of [0.25, 0.6]) kreis(ctx, H[0] + t * (S[0] - H[0]) + 0.03, H[1] + t * (S[1] - H[1]), 0.018, f.punkte);
+  if (typ === "kind") {                        // Rock über dem Oberschenkel
+    ctx.fillStyle = f.oben; ctx.beginPath(); ctx.moveTo(H[0] - 0.09, H[1] - 0.02); ctx.lineTo(H[0] + 0.05, H[1] - 0.14);
+    ctx.lineTo(K[0] - 0.02, K[1] - 0.05); ctx.lineTo(K[0] - 0.04, K[1] + 0.05); ctx.lineTo(H[0] - 0.09, H[1] + 0.05); ctx.fill();
+  } else {                                     // T-Shirt-Aufdruck
+    ctx.save(); ctx.translate((H[0] + S[0]) / 2 + 0.02, (H[1] + S[1]) / 2); ctx.rotate(lehne);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 0.1px serif"; ctx.textAlign = "center"; ctx.fillText("π", 0, 0.03); ctx.restore();
+  }
+  // vorderes Bein
+  strich(ctx, [H, K, Fu], f.beine, 0.08 * dick);
+  schuh(ctx, Fu, bein, f.schuh);
+  // Kopf
+  const kx = S[0] + 0.14 * rx * dick, ky = S[1] + 0.14 * ry * dick;
+  kopf(ctx, kx, ky, 0.1 * dick, typ, Math.abs(vn), zopf);
+  // vorderer Arm zur Kette
+  strich(ctx, [S, ell(S, hand, 0.1), hand], FARBE.haut, 0.055 * dick);
+  kreis(ctx, hand[0], hand[1], 0.035 * dick, FARBE.haut);
+}
+function schuh(ctx, F, w, farbe) {
+  ctx.save(); ctx.translate(F[0], F[1]); ctx.rotate(-w + Math.PI / 2 - Math.PI / 2);
+  ctx.fillStyle = farbe; ctx.beginPath(); ctx.ellipse(0.04, 0.01, 0.065, 0.035, -w + 0.0, 0, 7); ctx.fill(); ctx.restore();
+}
+function shade(hex) {                           // etwas dunkler für die hintere Körperseite
+  const n = parseInt(hex.slice(1), 16), d = c => Math.round(c * 0.78);
+  return `rgb(${d(n >> 16)},${d((n >> 8) & 255)},${d(n & 255)})`;
+}
+
+/* Maße der stehenden Figuren (in m, typ kind = Liyana, papa = Sergej) */
+const STEH = { kind: { sc: 1.2, oa: 0.27, ua: 0.27 }, papa: { sc: 1.6, oa: 0.37, ua: 0.37 } };
+function schulter(typ, fx, boden, lehne) {
+  const sc = STEH[typ].sc, hy = boden - 0.58 * sc;
+  return [fx + 0.32 * sc * Math.sin(lehne), hy - 0.32 * sc * Math.cos(lehne)];
+}
+/** Stehende Person; ziel = Punkt, an den die Hände greifen (oder null); modus "handy" | "daneben" */
+function stehend(ctx, typ, fx, boden, lehne, ziel, modus) {
+  const f = FARBE[typ], { sc, oa, ua } = STEH[typ], dick = typ === "papa" ? 1.5 : 1.2;
+  const H = [fx, boden - 0.58 * sc], S = schulter(typ, fx, boden, lehne);
+  const F1 = [fx - 0.12 * sc - 0.25 * lehne * sc, boden - 0.03], F2 = [fx + 0.12 * sc, boden - 0.03];
+  const knie = (A, B, vor) => [(A[0] + B[0]) / 2 + vor, (A[1] + B[1]) / 2];
+  const hand = [];
+  if (ziel) hand.push(ziel, [ziel[0] - 0.02, ziel[1] + 0.04]);
+  else if (modus === "daneben") { const L = oa + ua; hand.push([S[0] + L * 0.98, S[1] - 0.12 * sc], [S[0] + L * 0.95, S[1] + 0.02]); }
+  else hand.push([S[0] + 0.2 * sc, S[1] + 0.1 * sc], [S[0] + 0.12 * sc, S[1] - 0.1 * sc]);
+  const arm = (Z0, bunt) => {
+    const dx = Z0[0] - S[0], dy = Z0[1] - S[1], d = Math.min(Math.hypot(dx, dy), oa + ua - 1e-4);
+    const w = Math.atan2(dy, dx), A = Math.acos(klemm((oa * oa + d * d - ua * ua) / (2 * oa * d), -1, 1));
+    const E = [S[0] + oa * Math.cos(w + A), S[1] + oa * Math.sin(w + A)];
+    const Hd = [E[0] + ua * Math.cos(Math.atan2(Z0[1] - E[1], Z0[0] - E[0])), E[1] + ua * Math.sin(Math.atan2(Z0[1] - E[1], Z0[0] - E[0]))];
+    strich(ctx, [S, E], bunt ? f.oben : shade(f.oben), 0.07 * dick);
+    strich(ctx, [E, Hd], bunt ? FARBE.haut : shade(FARBE.haut), 0.05 * dick);
+    kreis(ctx, Hd[0], Hd[1], 0.035 * dick, bunt ? FARBE.haut : shade(FARBE.haut));
+    return Hd;
+  };
+  // Schatten
+  ctx.fillStyle = "rgba(0,0,0,.15)"; ctx.beginPath(); ctx.ellipse(fx, boden + 0.01, 0.3 * sc, 0.04, 0, 0, 7); ctx.fill();
+  arm(hand[1], false);                                         // hinterer Arm
+  strich(ctx, [H, knie(H, F1, 0.02), F1], shade(f.beine), 0.08 * dick);
+  strich(ctx, [H, knie(H, F2, 0.04), F2], f.beine, 0.085 * dick);
+  for (const Fp of [F1, F2]) { ctx.fillStyle = f.schuh; ctx.beginPath(); ctx.ellipse(Fp[0] + 0.04 * sc, Fp[1], 0.07 * sc, 0.035 * sc, 0, 0, 7); ctx.fill(); }
+  strich(ctx, [H, S], f.oben, 0.17 * dick);
+  if (typ === "kind") {
+    ctx.fillStyle = f.oben; ctx.beginPath(); ctx.moveTo(H[0] - 0.15, H[1] + 0.12); ctx.lineTo(H[0] + 0.15, H[1] + 0.12);
+    ctx.lineTo(S[0] + 0.06, S[1] + 0.14); ctx.lineTo(S[0] - 0.07, S[1] + 0.14); ctx.fill();
+    for (const t of [0.3, 0.65]) kreis(ctx, H[0] + t * (S[0] - H[0]), H[1] + t * (S[1] - H[1]), 0.018, f.punkte);
+  } else {
+    ctx.save(); ctx.translate((H[0] + S[0]) / 2 + 0.03, (H[1] + S[1]) / 2); ctx.rotate(lehne);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 0.16px serif"; ctx.textAlign = "center"; ctx.fillText("π", 0, 0.05); ctx.restore();
+  }
+  const kx = S[0] + 0.15 * sc * Math.sin(lehne) * 1.0, ky = S[1] - 0.15 * sc * Math.cos(lehne);
+  kopf(ctx, kx, ky, 0.1 * dick, typ, modus === "daneben" ? 0 : ziel ? 0.6 : 0.3, 0, false);
+  const vorn = arm(hand[0], true);                             // vorderer Arm
+  if (!ziel && modus === "handy") {                            // Handy mit Stoppuhr
+    ctx.save(); ctx.translate(vorn[0] + 0.02, vorn[1] - 0.04); ctx.rotate(-0.2);
+    ctx.fillStyle = "#263238"; ctx.fillRect(-0.035 * sc, -0.07 * sc, 0.07 * sc, 0.13 * sc);
+    ctx.fillStyle = "#80deea"; ctx.fillRect(-0.027 * sc, -0.06 * sc, 0.054 * sc, 0.1 * sc); ctx.restore();
+  }
+  return { kopf: [kx, ky], r: 0.1 * dick };
+}
+
+/* ---------- Szene ---------- */
+const szene = leinwand($("szene"), () => szeneZeichnen());
+const L = { schiebX: -1.4 };                   // Standort des Schiebenden (wird bei Neustart berechnet)
+
+function reiterDaten(l, m) {                   // Brettabstand, Größe, Rückenpunkt (lokal)
+  const papa = istPapa(m), sc = papa ? 1.6 : 1.25;
+  return { Ls: l + 0.15, papa, typ: papa ? "papa" : "kind", ruecken: [-0.14 * sc, -0.26 * sc] };
+}
+const lokalZuWelt = (phi, lx, ly) => [lx * Math.cos(phi) + ly * Math.sin(phi), -lx * Math.sin(phi) + ly * Math.cos(phi)];
+function rueckenWelt(phi, l, m) {
+  const R = reiterDaten(l, m); return lokalZuWelt(phi, R.ruecken[0], R.Ls + R.ruecken[1]);
+}
+const schiebTyp = () => istPapa(P.m) ? "kind" : "papa";
+const reichweite = typ => STEH[typ].oa + STEH[typ].ua;
+const DRUECK = 0.45;                           // Vorbeugen beim Schubsen (rad)
+
+function standortBerechnen() {                 // Schiebende Person so hinstellen, dass sie hinten gut hinkommt
+  const typ = schiebTyp(), boden = P.l + 0.6, B = rueckenWelt(-P.s0 / P.l, P.l, P.m);
+  const S0 = schulter(typ, 0, boden, DRUECK), dy = B[1] - S0[1], r = 0.85 * reichweite(typ);
+  const dx = Math.abs(dy) < r ? Math.sqrt(r * r - dy * dy) : 0.1;
+  L.schiebX = Math.min(B[0] - dx - S0[0], -0.6);
+}
+
+function inReichweite() {
+  const typ = schiebTyp(), B = rueckenWelt(Z.phi, P.l, P.m), S = schulter(typ, L.schiebX, P.l + 0.6, DRUECK);
+  return { ok: Math.hypot(B[0] - S[0], B[1] - S[1]) <= reichweite(typ) * 0.99 && B[0] > S[0], B };
+}
+
+function szeneZeichnen() {
+  const { ctx, b, h } = szene, l = P.l, boden = l + 0.6;
+  const zeit = performance.now() / 1000;
+  // Maßstab: alles muss hineinpassen
+  const phiMax = Math.max(P.s0, VG ? VG.s0 : 0) / l;
+  const links = Math.min(L.schiebX - 0.55, -0.45 * boden - 0.5);
+  const rechts = Math.max((l + 0.15) * Math.sin(phiMax) + 0.75, 0.45 * boden + 0.6);
+  const k = Math.min(h / (l + 1.75), b / (rechts - links));
+  const ox = (b - (rechts - links) * k) / 2 - links * k, oy = h - (boden + 0.32) * k;
+  const W = (x, y) => [ox + x * k, oy + y * k], gy = oy + boden * k;
+  ctx.clearRect(0, 0, b, h);
+
+  // Himmel, Sonne, Wolken, Hügel
+  const hg = ctx.createLinearGradient(0, 0, 0, gy); hg.addColorStop(0, "#7ec8f5"); hg.addColorStop(1, "#d8f0ff");
+  ctx.fillStyle = hg; ctx.fillRect(0, 0, b, gy);
+  sonne(ctx, b - 0.07 * Math.min(b, h) - 30, 0.11 * Math.min(b, h) + 18, 0.055 * Math.min(b, h) + 12, zeit);
+  for (let i = 0; i < 4; i++) {
+    const w = 0.12 * b + 40, x = ((i * 0.31 * b + zeit * (8 + 3 * i)) % (b + 2 * w)) - w;
+    wolke(ctx, x, (0.08 + 0.09 * (i % 2)) * h + 10, w);
+  }
+  ctx.fillStyle = "#a5d6a7"; ctx.beginPath(); ctx.ellipse(b * 0.2, gy + 10, b * 0.35, h * 0.16, 0, Math.PI, 0); ctx.fill();
+  ctx.fillStyle = "#b9e2b0"; ctx.beginPath(); ctx.ellipse(b * 0.8, gy + 10, b * 0.4, h * 0.12, 0, Math.PI, 0); ctx.fill();
+  baum(ctx, b * 0.06, gy, k); baum(ctx, b * 0.95, gy, k * 0.85);
+  // Zaun
+  ctx.strokeStyle = "#e0c9a6"; ctx.lineWidth = Math.max(3, 0.05 * k);
+  for (let x = 8; x < b; x += Math.max(18, 0.22 * k)) { ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x, gy - 0.55 * k); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(0, gy - 0.4 * k); ctx.lineTo(b, gy - 0.4 * k); ctx.moveTo(0, gy - 0.18 * k); ctx.lineTo(b, gy - 0.18 * k); ctx.stroke();
+  // Wiese mit Blumen
+  const wg = ctx.createLinearGradient(0, gy, 0, h); wg.addColorStop(0, "#7cc46a"); wg.addColorStop(1, "#5aa64b");
+  ctx.fillStyle = wg; ctx.fillRect(0, gy, b, h - gy);
+  const bunt = ["#ff5252", "#ffeb3b", "#ffffff", "#e040fb", "#40c4ff"];
+  for (let i = 0; i < 26; i++) {
+    const x = ((i * 137.5) % 100) / 100 * b, y = gy + 6 + ((i * 53) % 17) / 17 * (h - gy - 10);
+    for (let j = 0; j < 5; j++) kreis(ctx, x + 3.2 * Math.cos(j * 1.26), y + 3.2 * Math.sin(j * 1.26), 2.6, bunt[i % 5]);
+    kreis(ctx, x, y, 1.8, "#ffa000");
+  }
+
+  // Ab hier in Metern
+  ctx.save(); ctx.translate(ox, oy); ctx.scale(k, k);
+  // Gerüst (A-Gestell von der Seite)
+  const fuss = 0.45 * boden;
+  ctx.fillStyle = "rgba(0,0,0,.12)";
+  for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s * fuss, boden + 0.01, 0.2, 0.035, 0, 0, 7); ctx.fill(); }
+  strich(ctx, [[-fuss, boden], [0, 0], [fuss, boden]], "#1565c0", 0.1);
+  strich(ctx, [[-fuss * 0.55, boden * 0.55], [fuss * 0.55, boden * 0.55]], "#1976d2", 0.05);
+  kreis(ctx, 0, 0, 0.11, "#0d47a1"); kreis(ctx, 0, 0, 0.04, "#cfd8dc");
+  vogel(ctx, 0, -0.12, zeit, Z.phi);
+
+  // Bahn und Ruhelage
+  if (P.pfeile || P.modell) {
+    ctx.setLineDash([0.05, 0.05]); ctx.strokeStyle = "rgba(40,50,60,.55)"; ctx.lineWidth = 0.018;
+    ctx.beginPath(); ctx.moveTo(0, 0.12); ctx.lineTo(0, boden); ctx.stroke();
+    ctx.setLineDash([0.015, 0.05]); ctx.lineWidth = 0.025; ctx.beginPath();
+    ctx.arc(0, 0, l, Math.PI / 2 - phiMax - 0.12, Math.PI / 2 + phiMax + 0.12); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // Schattenwurf der Schaukel
+  const R = reiterDaten(l, P.m), sx = (l + 0.15) * Math.sin(Z.phi);
+  ctx.fillStyle = "rgba(0,0,0,.15)"; ctx.beginPath(); ctx.ellipse(sx, boden + 0.01, 0.28, 0.04, 0, 0, 7); ctx.fill();
+
+  // Vergleichsschaukel (grau, durchsichtig)
+  if (VG) { ctx.save(); ctx.globalAlpha = 0.32; schaukel(ctx, VG.z, VG.l, VG.m, false); ctx.restore(); }
+
+  // Schiebende Person
+  const typS = schiebTyp(), reich = inReichweite(), t = Z.t;
+  const druecktGerade = t < Z.schubsBis || t < Z.druckBis || (P.takt && Z.om <= 0 && Z.phi < 0);
+  const greift = reich.ok && druecktGerade;
+  const daneben = t < Z.danebenBis;
+  ctx.save(); if (P.modell) ctx.globalAlpha = 0.22;
+  const sp = stehend(ctx, typS, L.schiebX, boden, greift || daneben ? DRUECK : 0.08, greift ? reich.B : null, daneben ? "daneben" : "handy");
+  ctx.restore();
+
+  // Hauptschaukel
+  ctx.save(); if (P.modell) ctx.globalAlpha = 0.22;
+  const kp = schaukel(ctx, Z, l, P.m, true);
+  ctx.restore();
+  ctx.restore();   // Ende Meter
+
+  const SP = W(l * Math.sin(Z.phi), l * Math.cos(Z.phi));    // Schwerpunkt auf dem Bildschirm
+  if (P.modell) modellZeichnen(ctx, W, k, SP);
+  if (P.pfeile) groessenZeichnen(ctx, W, k, SP);
+
+  // Schubs-Effekt
+  if (t < Z.schubsBis && (greift || t < 0.36)) {
+    const B = W(...rueckenWelt(Z.phi, l, P.m));
+    stern(ctx, B[0] - 0.1 * k, B[1] - 0.1 * k, 0.24 * k + 18, "SCHUBS!");
+  }
+  if (daneben) { const S = W(...schulter(typS, L.schiebX, boden, DRUECK)); stern(ctx, S[0] + 0.6 * k, S[1] - 0.35 * k, 0.16 * k + 14, "?!"); }
+
+  // Sprech- und Denkblasen
+  const kopfR = W(...kp.kopf), kopfS = W(...sp.kopf);
+  for (const wer of ["reiter", "schieber"]) if (sprech[wer] && Z.t > sprech[wer].bis) delete sprech[wer];
+  if (sprech.reiter) blase(ctx, sprech.reiter.text, kopfR[0], kopfR[1] - kp.r * k - 8, b, false);
+  if (sprech.schieber) blase(ctx, sprech.schieber.text, kopfS[0], kopfS[1] - sp.r * k - 8, b, false);
+  else if (!greift && !daneben && !P.modell) blase(ctx, istPapa(P.m) ? "Hau ruck …" : "T = 2π·√(l/g) …", kopfS[0], kopfS[1] - sp.r * k - 8, b, true);
+
+  messapp(ctx, b, h);
+  szene.wahl = { W, k };
+}
+
+/** Schaukel samt Reiter; liefert Kopfposition (Welt) */
+function schaukel(ctx, z, l, m, hauptsache) {
+  const R = reiterDaten(l, m), phi = z.phi, v = l * z.om;
+  const vmax = Math.sqrt(2 * G * l * (1 - Math.cos(Math.max(0.05, (hauptsache ? P.s0 : VG.s0) / l))));
+  const vn = klemm(v / vmax, -1, 1);
+  ctx.save(); ctx.rotate(-phi);
+  // Kette
+  ctx.setLineDash([0.05, 0.025]); strich(ctx, [[0, 0], [0, R.Ls]], "#78909c", 0.03); ctx.setLineDash([]);
+  strich(ctx, [[0, 0], [0, R.Ls]], "rgba(84,110,122,.6)", 0.01);
+  // Brett
+  ctx.fillStyle = "#8d6e63"; ctx.fillRect(-0.24, R.Ls, 0.48, 0.05);
+  ctx.fillStyle = "#a1887f"; ctx.fillRect(-0.24, R.Ls, 0.48, 0.018);
+  const sc = R.papa ? 1.6 : 1.25;
+  ctx.translate(0, R.Ls); ctx.scale(sc, sc);
+  sitzend(ctx, R.typ, vn, klemm(-0.06 * z.acc, -0.6, 0.6));
+  ctx.restore();
+  // vordere Kette über der Hand
+  ctx.save(); ctx.rotate(-phi); strich(ctx, [[0, R.Ls - 0.5 * sc], [0, R.Ls - 0.2 * sc]], "#90a4ae", 0.02); ctx.restore();
+  const d = R.papa ? 1.15 : 1, lehne = -0.3 * vn, hx = -0.05 + (0.33 + 0.14 * d) * Math.sin(lehne), hy = -0.06 - (0.33 + 0.14 * d) * Math.cos(lehne);
+  return { kopf: lokalZuWelt(phi, hx * sc, R.Ls + hy * sc), r: 0.1 * d * sc };
+}
+
+function modellZeichnen(ctx, W, k, SP) {
+  const P0 = W(0, 0);
+  ctx.save(); ctx.strokeStyle = "#111"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(P0[0], P0[1]); ctx.lineTo(SP[0], SP[1]); ctx.stroke();
+  kreis(ctx, SP[0], SP[1], Math.max(10, 0.1 * k), "#c62828");
+  ctx.restore();
+  beschriftung(ctx, "m = " + fmt(P.m, 0, "kg"), SP[0] + 0.12 * k + 16, SP[1] - 0.3 * k, { groesse: 15, fett: true, ausrichtung: "left" });
+  const M = [(P0[0] + SP[0]) / 2, (P0[1] + SP[1]) / 2];
+  beschriftung(ctx, "l = " + fmt(P.l, 2, "m"), M[0] - 12, M[1], { groesse: 15, fett: true, ausrichtung: "right" });
+  // Kasten mit den Vereinfachungen
+  const zeilen = ["Modell Fadenpendel – Vereinfachungen:", "① Ketten masselos und nicht dehnbar",
+    "② ganze Masse im Schwerpunkt (Massepunkt)", "③ keine Reibung, kein Luftwiderstand",
+    "④ kleine Auslenkung (hier ca. " + fmt(P.s0 / P.l * 180 / Math.PI, 0, "°") + ")", "⑤ Liyana sitzt still (kein Mitschwingen)"];
+  const g = fs(14), zh = g * 1.45, breite = Math.min(szene.b - 20, g * 22);
+  const x0 = szene.b - breite - 10, y0 = 10;
+  ctx.save(); ctx.fillStyle = "rgba(255,255,255,.93)"; ctx.strokeStyle = "#1f5c99"; ctx.lineWidth = 2;
+  rundRechteck(ctx, x0, y0, breite, zh * zeilen.length + 10, 10); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#1b2430"; ctx.textBaseline = "top";
+  zeilen.forEach((z, i) => { ctx.font = `${i ? "" : "600 "}${g}px ${css("--schrift")}`; ctx.fillText(z, x0 + 10, y0 + 6 + i * zh, breite - 16); });
+  ctx.restore();
+}
+
+function groessenZeichnen(ctx, W, k, SP) {
+  const l = P.l, phi = Z.phi, s = l * phi, v = l * Z.om;
+  const P0 = W(0, 0), boden = W(0, l + 0.6);
+  beschriftung(ctx, "Ruhelage s = 0", P0[0], boden[1] + 16, { groesse: 13, farbe: "#33414f" });
+  if (!P.modell) { const M = W(0.5 * l * Math.sin(phi) - 0.08, 0.5 * l * Math.cos(phi));
+    beschriftung(ctx, "l", M[0] - 8, M[1], { groesse: 16, fett: true }); }
+  // Auslenkung s als Bogen (grün)
+  if (Math.abs(s) > 0.02) {
+    const r = (l + 0.05) * k, gruen = css("--kurve3");
+    ctx.save(); ctx.strokeStyle = gruen; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.beginPath();
+    const a0 = Math.PI / 2, a1 = Math.PI / 2 - phi;
+    ctx.arc(P0[0], P0[1], r, Math.min(a0, a1), Math.max(a0, a1)); ctx.stroke(); ctx.restore();
+    const e = [P0[0] + r * Math.cos(a1), P0[1] + r * Math.sin(a1)], d = 0.06 * Math.sign(phi);
+    pfeil(ctx, P0[0] + r * Math.cos(a1 + d), P0[1] + r * Math.sin(a1 + d), e[0], e[1], gruen, 4, 14);
+    const m = [P0[0] + (r + 22) * Math.cos((a0 + a1) / 2), P0[1] + (r + 22) * Math.sin((a0 + a1) / 2)];
+    beschriftung(ctx, "s = " + fmt(s, 2, "m"), m[0], m[1] + 6, { groesse: 15, farbe: gruen, fett: true });
+  }
+  kreis(ctx, SP[0], SP[1], 5, "#1b2430");
+  // Geschwindigkeit v (rot, tangential)
+  if (Math.abs(v) > 0.03) {
+    const sk = 0.55 * k, tx = Math.cos(phi), ty = -Math.sin(phi), rot = css("--kurve2");
+    const A = [SP[0], SP[1] - 0.05 * k], E = [A[0] + v * sk * tx, A[1] + v * sk * ty];
+    pfeil(ctx, A[0], A[1], E[0], E[1], rot, 4, 15);
+    beschriftung(ctx, "v = " + fmt(v, 2, "m/s"), E[0] + Math.sign(v) * 52, E[1] - 14, { groesse: 15, farbe: rot, fett: true });
+  }
+}
+
+function messapp(ctx, b, h) {
+  const g = fs(14), zh = g * 1.4, br = g * 10.5, ho = zh * 4 + 16, x = 10, y = 10;
+  ctx.save(); ctx.fillStyle = "#263238"; rundRechteck(ctx, x, y, br, ho, 12); ctx.fill();
+  ctx.fillStyle = "#e0f7fa"; rundRechteck(ctx, x + 5, y + 5, br - 10, ho - 10, 8); ctx.fill();
+  ctx.fillStyle = "#1b2430"; ctx.textBaseline = "top";
+  const z = [["⏱ Messapp", true], ["t = " + fmt(Z.t, 2, "s")], ["Schwingungen: " + Z.n],
+             ["T = " + (Z.n ? fmt(Z.tLetzt / Z.n, 2, "s") : "…")]];
+  z.forEach(([txt, fett], i) => { ctx.font = `${fett ? "700 " : ""}${g}px ${css("--schrift")}`; ctx.fillText(txt, x + 12, y + 9 + i * zh); });
+  ctx.restore();
+}
+
+/* ---------- Kleine Bildchen ---------- */
+function rundRechteck(ctx, x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function sonne(ctx, x, y, r, zeit) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(zeit * 0.15);
+  ctx.strokeStyle = "#ffca28"; ctx.lineWidth = Math.max(2, r * 0.12); ctx.lineCap = "round";
+  for (let i = 0; i < 12; i++) { const w = i * Math.PI / 6; ctx.beginPath();
+    ctx.moveTo(1.25 * r * Math.cos(w), 1.25 * r * Math.sin(w)); ctx.lineTo(1.6 * r * Math.cos(w), 1.6 * r * Math.sin(w)); ctx.stroke(); }
+  ctx.restore();
+  kreis(ctx, x, y, r, "#ffd54f"); kreis(ctx, x - 0.55 * r, y + 0.3 * r, 0.16 * r, "rgba(255,112,67,.45)"); kreis(ctx, x + 0.55 * r, y + 0.3 * r, 0.16 * r, "rgba(255,112,67,.45)");
+  ctx.fillStyle = "#212121";                    // Sonnenbrille
+  ctx.beginPath(); ctx.ellipse(x - 0.33 * r, y - 0.12 * r, 0.3 * r, 0.2 * r, 0, 0, 7); ctx.ellipse(x + 0.33 * r, y - 0.12 * r, 0.3 * r, 0.2 * r, 0, 0, 7); ctx.fill();
+  strich(ctx, [[x - 0.35 * r, y - 0.2 * r], [x + 0.35 * r, y - 0.2 * r]], "#212121", 0.08 * r);
+  ctx.strokeStyle = "#6d4c41"; ctx.lineWidth = 0.09 * r; ctx.beginPath(); ctx.arc(x, y + 0.2 * r, 0.42 * r, 0.35, Math.PI - 0.35); ctx.stroke();
+}
+function wolke(ctx, x, y, w) {
+  ctx.fillStyle = "rgba(255,255,255,.92)";
+  for (const [dx, dy, r] of [[0, 0, .22], [.22, -.12, .26], [.47, 0, .22], [.25, .07, .2]]) kreis(ctx, x + dx * w, y + dy * w, r * w, "rgba(255,255,255,.92)");
+}
+function baum(ctx, x, gy, k) {
+  const s = Math.max(40, 0.9 * k);
+  ctx.fillStyle = "#795548"; ctx.fillRect(x - 0.1 * s, gy - 1.3 * s, 0.2 * s, 1.3 * s);
+  kreis(ctx, x, gy - 1.7 * s, 0.6 * s, "#43a047"); kreis(ctx, x - 0.45 * s, gy - 1.35 * s, 0.45 * s, "#4caf50");
+  kreis(ctx, x + 0.45 * s, gy - 1.35 * s, 0.45 * s, "#388e3c");
+  for (const [dx, dy] of [[-.25, -1.8], [.3, -1.5], [-.5, -1.3]]) kreis(ctx, x + dx * s, gy + dy * s, 0.07 * s, "#e53935");
+}
+function vogel(ctx, x, y, zeit, phi) {
+  const hop = Math.abs(Math.sin(zeit * 2.2)) * 0.02;
+  ctx.save(); ctx.translate(x, y - hop);
+  ctx.fillStyle = "#ffa000"; ctx.fillRect(-0.03, 0.05, 0.012, 0.04); ctx.fillRect(0.02, 0.05, 0.012, 0.04);
+  ctx.fillStyle = "#29b6f6"; ctx.beginPath(); ctx.ellipse(0, 0, 0.1, 0.075, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = "#0288d1"; ctx.beginPath(); ctx.ellipse(-0.03, 0.0, 0.06, 0.035, -0.3 + 0.3 * Math.sin(zeit * 9) * (Math.abs(phi) > 0.4 ? 1 : 0), 0, 7); ctx.fill();
+  const kx = Math.sign(phi || 1) * 0.07;
+  kreis(ctx, kx, -0.07, 0.055, "#29b6f6");
+  ctx.fillStyle = "#ff8f00"; ctx.beginPath(); ctx.moveTo(kx + Math.sign(kx) * 0.045, -0.08); ctx.lineTo(kx + Math.sign(kx) * 0.1, -0.065); ctx.lineTo(kx + Math.sign(kx) * 0.045, -0.05); ctx.fill();
+  kreis(ctx, kx + Math.sign(kx) * 0.02, -0.08, 0.014, "#111");
+  ctx.restore();
+}
+function stern(ctx, x, y, r, text) {
+  ctx.save(); ctx.translate(x, y); ctx.fillStyle = "#ffeb3b"; ctx.strokeStyle = "#f57c00"; ctx.lineWidth = 3;
+  ctx.beginPath(); for (let i = 0; i < 20; i++) { const w = i * Math.PI / 10, rr = i % 2 ? r * 0.62 : r; ctx.lineTo(rr * Math.cos(w), rr * 0.7 * Math.sin(w)); }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#d84315"; ctx.font = `800 ${Math.round(r * 0.36)}px ${css("--schrift")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.rotate(-0.12); ctx.fillText(text, 0, 1); ctx.restore();
+}
+/** Sprechblase (oder Denkblase) über einem Punkt */
+function blase(ctx, text, ax, ay, b, denken) {
+  ctx.save(); const g = fs(15); ctx.font = `${denken ? "italic " : "600 "}${g}px ${css("--schrift")}`;
+  const w = ctx.measureText(text).width + 22, hh = g * 1.9;
+  let x = klemm(ax - w / 2, 6, b - w - 6), y = Math.max(4, ay - hh - 22);
+  ctx.fillStyle = "#fff"; ctx.strokeStyle = "#37474f"; ctx.lineWidth = 2;
+  if (denken) {
+    ctx.beginPath(); ctx.ellipse(x + w / 2, y + hh / 2, w / 2 + 6, hh / 2 + 4, 0, 0, 7); ctx.fill(); ctx.stroke();
+    for (const [f, r] of [[0.45, 6], [0.75, 4]]) { ctx.beginPath(); ctx.arc(ax + (x + w / 2 - ax) * (1 - f) * 0.3, y + hh + 4 + f * (ay - y - hh - 4), r, 0, 7); ctx.fill(); ctx.stroke(); }
+  } else {
+    rundRechteck(ctx, x, y, w, hh, 12); ctx.fill(); ctx.stroke();
+    const tx = klemm(ax, x + 14, x + w - 14);
+    ctx.beginPath(); ctx.moveTo(tx - 8, y + hh - 1); ctx.lineTo(ax, Math.min(ay, y + hh + 20)); ctx.lineTo(tx + 8, y + hh - 1);
+    ctx.fill(); ctx.stroke(); ctx.fillRect(tx - 7, y + hh - 4, 14, 4);
+  }
+  ctx.fillStyle = "#1b2430"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(text, x + w / 2, y + hh / 2 + 1);
+  ctx.restore();
+}
+
+/* ---------- Sinusuhr ---------- */
+const uhr = leinwand($("sinusuhr"), () => uhrZeichnen());
+function uhrZeichnen() {
+  const { ctx, b, h } = uhr; ctx.clearRect(0, 0, b, h);
+  const cx = b / 2, cy = h / 2, r = Math.min(h / 2 - fs(22) - 6, b * 0.2);
+  ctx.strokeStyle = "#90a4ae"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke();
+  const stellen = [["sin", -Math.PI / 2, "s"], ["cos", 0, "v"], ["−sin", Math.PI / 2, "a"], ["−cos", Math.PI, ""]];
+  const farbe = { s: css("--kurve3"), v: css("--kurve2"), a: css("--kurve1"), "": "#5a6675" };
+  for (let i = 0; i < 4; i++) {                // Pfeile im Uhrzeigersinn: jede Ableitung ein Schritt weiter
+    const w0 = stellen[i][1] + 0.38, w1 = stellen[i][1] + Math.PI / 2 - 0.38;
+    ctx.strokeStyle = "#5a6675"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(cx, cy, r, w0, w1); ctx.stroke();
+    pfeil(ctx, cx + r * Math.cos(w1 - 0.05), cy + r * Math.sin(w1 - 0.05), cx + r * Math.cos(w1), cy + r * Math.sin(w1), "#5a6675", 2.5, 11);
+    const wm = (w0 + w1) / 2;
+    beschriftung(ctx, "ableiten", cx + (r + 34) * Math.cos(wm), cy + (r + 16) * Math.sin(wm), { groesse: 11, farbe: "#5a6675" });
+  }
+  for (const [txt, w, gr] of stellen) {
+    const x = cx + r * Math.cos(w), y = cy + r * Math.sin(w);
+    kreis(ctx, x, y, fs(22), "#fff"); ctx.strokeStyle = farbe[gr]; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, fs(22), 0, 7); ctx.stroke();
+    beschriftung(ctx, txt, x, y, { groesse: 15, fett: true, farbe: farbe[gr], hintergrund: false });
+    if (gr) beschriftung(ctx, gr + "(t)", x + fs(22) + 8, y + (w === 0 ? 0 : w < 0 ? -10 : 10),
+                         { groesse: 14, fett: true, farbe: farbe[gr], ausrichtung: "left" });
+  }
+  beschriftung(ctx, "Sinusuhr", cx, cy, { groesse: 14, farbe: "#5a6675", hintergrund: false });
+}
+function formelnZeigen() {
+  const om = omegaFormel(P.l), s0 = P.s0, w = fmt(om, 2);
+  $("formeln").innerHTML = `
+    <div>ω = 2π / <i>T</i> = 2π / ${fmt(TFormel(P.l), 2, "s")} ≈ ${w} 1/s</div>
+    <div style="color:var(--kurve3)"><b><i>s</i>(<i>t</i>)</b> = <i>ŝ</i>·sin(ω·<i>t</i>) = ${fmt(s0, 2, "m")} · sin(${w} 1/s · <i>t</i>)</div>
+    <div style="color:var(--kurve2)"><b><i>v</i>(<i>t</i>)</b> = <i>ŝ</i>·ω·cos(ω·<i>t</i>) = ${fmt(s0 * om, 2, "m/s")} · cos(${w} 1/s · <i>t</i>)</div>
+    <div style="color:var(--kurve1)"><b><i>a</i>(<i>t</i>)</b> = −<i>ŝ</i>·ω²·sin(ω·<i>t</i>) = −${fmt(s0 * om * om, 2, "m/s²")} · sin(${w} 1/s · <i>t</i>)</div>
+    <div class="klein">Höchstgeschwindigkeit <i>v̂</i> = <i>ŝ</i>·ω ≈ ${fmt(s0 * om, 2, "m/s")} ≈ ${fmt(s0 * om * 3.6, 1, "km/h")}</div>`;
+}
+
+/* ---------- Diagramm, Balken, Messwerte ---------- */
+const diagramm = new Diagramm($("diagramm"), { xName: "t", xEinheit: "s", yName: null, fenster: 6.3 });
+diagramm.reihe("s", "Auslenkung s", css("--kurve3"), true, "s in m");
+diagramm.reihe("sth", "Rechnung ŝ·sin(ωt)", "#111", true, "s in m", [7, 6]);
+diagramm.reihe("v", "Geschwindigkeit v", css("--kurve2"), false, "v in m/s");
+diagramm.reihe("a", "Beschleunigung a", css("--kurve1"), false, "a in m/s²");
+diagramm.reihe("vgl", "Vergleich (grau)", "#9e9e9e", true, "s in m", [3, 5]);
+diagramm.auswahl($("kurvenwahl"));
+function achsenAnpassen() {
+  const sicht = [...diagramm.reihen].filter(([, r]) => r.sichtbar).map(([id]) => id);
+  if (sicht.length && sicht.every(id => ["s", "sth", "vgl"].includes(id))) {
+    const Y = Math.ceil(Math.max(P.s0, VG ? VG.s0 : 0) * 1.3 * 5) / 5;
+    diagramm.achsen({ yName: "s", yEinheit: "m", yMin: -Y, yMax: Y });
+  } else diagramm.achsen({ yName: null, yMin: null, yMax: null });
+}
+
+const balken = new Balken($("balken"), [
+  { id: "pot", name: "Lage", farbe: css("--e-pot"), stellen: 0 },
+  { id: "kin", name: "Bewegung", farbe: css("--e-kin"), stellen: 0 },
+  { id: "th", name: "innere", farbe: css("--e-th"), stellen: 0 },
+  { id: "ges", name: "Gesamt", farbe: css("--e-ges"), stellen: 0 }], "J");
+
+function messwerteZeigen() {
+  const E = energie(), s = P.l * Z.phi, v = P.l * Z.om;
+  $("messwerte").innerHTML =
+    `<div><b>t</b> = ${fmt(Z.t, 2, "s")}</div><div><b>s</b> = ${fmt(s, 2, "m")}</div>
+     <div><b>v</b> = ${fmt(v, 2, "m/s")} (${fmt(v * 3.6, 1, "km/h")})</div><div><b>h</b> = ${fmt(E.h * 100, 1, "cm")}</div>
+     <div><b>T</b> (Formel) = ${fmt(TFormel(P.l), 2, "s")}</div><div><b>Winkel</b> = ${fmt(Z.phi * 180 / Math.PI, 1, "°")}</div>`;
+  const E0 = P.m * Z.E0;
+  balken.zeichnen(E, Math.max(E0 * 1.15, E.ges * 1.05) || 1);
+}
+
+/* ---------- Regler, Schalter, Presets ---------- */
+const R = {};
+function neuStart() {
+  lauf.pause(); Z = neuerZustand(P.l, P.s0); sprech = {}; spruchNr = 0;
+  if (VG) VG.z = neuerZustand(VG.l, VG.s0);
+  sag("reiter", istPapa(P.m) ? "Huiii!" : "Wiiiii!", 1.2);
+  standortBerechnen(); messreihe.length = 0; diagramm.leeren(); aufzeichnen(); formelnZeigen(); achsenAnpassen();
+}
+R.l = regler($("regler"), { id: "l", name: "Pendellänge l", min: 1, max: 3, schritt: 0.01, wert: P.l, einheit: "m",
+                            beiAenderung: v => { P.l = v; neuStart(); } });
+R.s0 = regler($("regler"), { id: "s0", name: "Amplitude ŝ (Schubs)", min: 0.1, max: 1.2, schritt: 0.05, wert: P.s0, einheit: "m",
+                             beiAenderung: v => { P.s0 = v; neuStart(); } });
+R.m = regler($("regler"), { id: "m", name: "Masse m (ab 50 kg: Papa)", min: 15, max: 100, schritt: 1, wert: P.m, einheit: "kg", stellen: 0,
+                            beiAenderung: v => { P.m = v; neuStart(); } });
+
+function schalter() {
+  $("btnModell").classList.toggle("aktiv", P.modell);
+  $("btnPfeile").classList.toggle("aktiv", P.pfeile);
+  $("btnReib").classList.toggle("aktiv", P.reib);
+  $("btnReib").textContent = P.reib ? "Reibung: an (ŝ halbiert sich in 30 s)" : "Reibung: aus";
+  $("btnTakt").classList.toggle("aktiv", P.takt);
+  $("btnTakt").textContent = `Papa schubst im Takt: ${P.takt ? "an" : "aus"}`;
+}
+$("btnModell").onclick = () => { P.modell = !P.modell; schalter(); };
+$("btnPfeile").onclick = () => { P.pfeile = !P.pfeile; schalter(); };
+$("btnReib").onclick = () => { P.reib = !P.reib; schalter(); };
+$("btnTakt").onclick = () => { P.takt = !P.takt; schalter(); };
+
+function schubsKnopf() {
+  if (!lauf.laeuft) { lauf.start(); return; }
+  const r = inReichweite(), v = P.l * Z.om;
+  if (!r.ok) { Z.danebenBis = Z.t + 0.6; sag(istPapa(P.m) ? "schieber" : "schieber", "Hoppla – zu weit weg!", 1.6); return; }
+  schubsen(0.35);
+  if (v < -0.2) sag("reiter", istPapa(P.m) ? "Aua! Du bremst mich!" : "Aua, Papa! Du bremst mich ja!", 2);
+  else if (Math.abs(v) <= 0.2) sag("reiter", "Perfekt – genau im Umkehrpunkt!", 2);
+  else sag("reiter", "Hinterherschubsen bringt nicht viel …", 2);
+}
+$("btnSchubs").onclick = schubsKnopf;
+$("szene").addEventListener("pointerdown", () => { if (lauf.laeuft) schubsKnopf(); });
+
+function setze(werte, vergleich = null) {
+  Object.assign(P, { reib: false, takt: false, stopNach: 0, modell: false }, werte);
+  for (const id of ["l", "s0", "m"]) R[id].setzen(P[id]);
+  VG = vergleich ? Object.assign({}, vergleich) : null;
+  diagramm.achsen({ fenster: P.reib ? 31 : 6.3 });
+  diagramm.reihen.get("vgl").sichtbar = !!VG;
+  diagramm.auswahl($("kurvenwahl"));
+  schalter(); neuStart();
+}
+const presets = [
+  { name: "Start (a–d)", tun: () => setze(Object.assign({}, KLAUSUR)) },
+  { name: "b) 10 Schwingungen stoppen", tun: () => setze(Object.assign({ stopNach: 10 }, KLAUSUR)) },
+  { name: "e) Fester schubsen", tun: () => setze(Object.assign({}, KLAUSUR, { s0: 1.0 }), Object.assign({}, KLAUSUR)) },
+  { name: "e) Papa auf die Schaukel (85 kg)", tun: () => setze(Object.assign({}, KLAUSUR, { m: 85 }), Object.assign({}, KLAUSUR)) },
+  { name: "f) Ohne Anschubsen (30 s)", tun: () => setze(Object.assign({ reib: true }, KLAUSUR)) },
+  { name: "f) Im Takt anschubsen", tun: () => setze(Object.assign({ reib: true, takt: true }, KLAUSUR)) },
+];
+for (const p of presets) {
+  const k = document.createElement("button"); k.textContent = p.name;
+  k.onclick = () => { schritte.aus(); p.tun(); };
+  $("presets").appendChild(k);
+}
+
+/* ---------- Schritt für Schritt: Klausur besprechen ---------- */
+function laufeBis(bed, max = 40) { lauf.pause(); const n = Math.round(max / DT); for (let i = 0; i < n && !bed(); i++) physikSchritt(); lauf.pause(); }
+const sichtbar = ids => { for (const [id, r] of diagramm.reihen) r.sichtbar = ids.includes(id); diagramm.auswahl($("kurvenwahl")); achsenAnpassen(); };
+const schritte = schrittmodus([
+  { text: "<b>a)</b> Sergej setzt die <b>Modell-Brille</b> auf: Aus Liyana und der Schaukel wird ein Fadenpendel – ein Massepunkt an einem masselosen Faden der Länge <i>l</i>. Welche Vereinfachungen stecken darin?",
+    vorbereiten: () => { setze(Object.assign({}, KLAUSUR)); P.modell = true; schalter(); sichtbar(["s", "sth"]); } },
+  { text: "<b>b)</b> Die Messapp stoppt 10 Schwingungen: etwa 30 s, also <i>T</i> = 3,0 s. Umgestellt: <i>l</i> = <i>g</i>·<i>T</i>² / (4π²) = 9,81 m/s² · (3,0 s)² / 39,48 ≈ <b>2,24 m</b>. <span class='klein'>(Die Simulation rechnet ohne Kleinwinkelnäherung – deshalb misst sie ein paar Hundertstel mehr.)</span>",
+    vorbereiten: () => { setze(Object.assign({}, KLAUSUR)); diagramm.achsen({ fenster: 31 }); sichtbar(["s"]); laufeBis(() => Z.n >= 10); } },
+  { text: "<b>c)</b> Im Diagramm: Amplitude <i>ŝ</i> = 0,6 m, Schwingungsdauer <i>T</i> = 3,0 s. Bewegungsgesetz: <i>s</i>(<i>t</i>) = 0,6 m · sin(2,09 1/s · <i>t</i>). Die gestrichelte Rechnung liegt genau auf der „Messung“.",
+    vorbereiten: () => { setze(Object.assign({}, KLAUSUR)); sichtbar(["s", "sth"]); laufeBis(() => Z.t >= 6.0); } },
+  { text: "<b>c)</b> Bei <i>t</i> = 0,5 s: <i>s</i> = 0,6 m · sin(2,09 · 0,5) = 0,6 m · sin(1,047) ≈ <b>0,52 m</b>. Taschenrechner auf RAD! Vergleiche mit der Messapp unten.",
+    vorbereiten: () => { setze(Object.assign({}, KLAUSUR)); sichtbar(["s", "sth"]); laufeBis(() => Z.t >= 0.5 - 1e-9); } },
+  { text: "<b>d)</b> Sinusuhr: sin wird abgeleitet zu cos, also <i>v</i>(<i>t</i>) = <i>ŝ</i>·ω·cos(ω·<i>t</i>). Am schnellsten ist Liyana in der Ruhelage: <i>v̂</i> = 0,6 m · 2,09 1/s ≈ <b>1,26 m/s ≈ 4,5 km/h</b> – etwa Schrittgeschwindigkeit.",
+    vorbereiten: () => { setze(Object.assign({}, KLAUSUR)); sichtbar(["s", "v"]); laufeBis(() => Z.t >= 3.0 - 1e-9); } },
+  { text: "<b>e)</b> Liyana: „Fester schubsen – dann bin ich schneller wieder da!“ Mit <i>ŝ</i> = 1,0 m (bunt) gegen 0,6 m (grau): Sie schwingt weiter und schneller, kommt aber <b>gleichzeitig</b> zurück. <i>T</i> hängt nicht von <i>ŝ</i> ab.",
+    vorbereiten: () => { presets[2].tun(); sichtbar(["s", "vgl"]); laufeBis(() => Z.t >= 3.0 - 1e-9); } },
+  { text: "<b>e)</b> Sergej (85 kg) statt Liyana (22 kg, grau): Die Kurven liegen <b>aufeinander</b>. In <i>T</i> = 2π·√(<i>l</i>/<i>g</i>) kommt keine Masse vor – mehr Masse ist träger, wird aber auch stärker zurückgezogen.",
+    vorbereiten: () => { presets[3].tun(); sichtbar(["s", "vgl"]); laufeBis(() => Z.t >= 4.5 - 1e-9); } },
+  { text: "<b>f)</b> Ohne Anschubsen: Die Amplitude halbiert sich in 30 s (Reibung, Luftwiderstand), die Schwingungsdauer bleibt 3,0 s. Für <i>T</i> ist das Modell sehr gut, für die Amplitude über längere Zeit nicht.",
+    vorbereiten: () => { presets[4].tun(); sichtbar(["s"]); laufeBis(() => Z.t >= 30 - 1e-9); } },
+  { text: "<b>f)</b> Richtig anschubsen: im Takt, also alle <i>T</i> = 3,0 s, am <b>hinteren Umkehrpunkt</b> in Bewegungsrichtung. Starte die Simulation! Probier dann selbst mit „Schubs!“: Was passiert, wenn Sergej zur falschen Zeit schubst?",
+    vorbereiten: () => { presets[5].tun(); sichtbar(["s"]); laufeBis(() => Z.t >= 9.0 - 1e-9); } },
+]);
+$("btnSchrittmodus").onclick = () => schritte.aktiv ? schritte.aus() : schritte.an();
+
+/* ---------- Erklärung ---------- */
+$("infoText").innerHTML = `
+  <p>Sergej schubst seine Tochter Liyana auf der Schaukel an – und denkt dabei natürlich an Physik.
+  Die Schaukel wird als <b>Fadenpendel</b> beschrieben: Massepunkt (Liyana + Brett, <i>m</i> = 22 kg) im Abstand
+  <i>l</i> = 2,24 m vom Aufhängepunkt, Ketten masselos, keine Reibung, kleine Auslenkung.
+  Dann gilt <i>T</i> = 2π·√(<i>l</i>/<i>g</i>) ≈ 3,0 s und das Bewegungsgesetz <i>s</i>(<i>t</i>) = <i>ŝ</i>·sin(ω·<i>t</i>)
+  mit <i>ŝ</i> = 0,6 m und ω = 2π/<i>T</i> ≈ 2,09 1/s (Start in der Ruhelage, nach vorn positiv).</p>
+  <p><b>Messapp:</b> zählt die vollständigen Schwingungen (Durchgänge durch die Ruhelage nach vorn) und berechnet daraus <i>T</i>.
+  <b>Modell-Brille:</b> zeigt das Fadenpendel hinter dem Bild. <b>Reibung:</b> wie in Aufgabe f halbiert sich die Amplitude in 30 s.
+  <b>Schubs!</b> gibt Liyana einen Stoß nach vorn (+0,35 m/s) – aber nur, wenn Sergej sie erreicht.
+  <b>Papa schubst im Takt:</b> Sergej drückt an jedem hinteren Umkehrpunkt kurz nach vorn, bis Liyana wieder 0,6 m erreichen kann. Weil er sie dabei beschleunigt, kommt sie etwas früher zurück – die Messapp zeigt dann gut 2,9 s statt 3,0 s.</p>
+  <p>Die Simulation rechnet genauer als die Formel, nämlich mit sin φ statt φ. Bei 15° Auslenkung ist die
+  Schwingungsdauer dadurch nur etwa 0,4 % länger (3,01 s statt 3,00 s) – die Kleinwinkelnäherung ist hier also sehr gut.
+  Bei „Fester schubsen“ (ŝ = 1,0 m ≈ 26°) wächst der Unterschied auf gut 1 %.</p>
+  <p class="klein">Rechnung: φ'' = −(g/l)·sin φ − β·φ', Velocity-Verlet mit Zeitschritt 1 ms, β = 2·ln2/30 s bei Reibung.
+  Energie: Lageenergie <i>m·g·h</i> mit <i>h</i> = <i>l</i>·(1 − cos φ), Bewegungsenergie ½·<i>m</i>·<i>v</i>²; Schubse erhöhen die Gesamtenergie.</p>`;
+
+/* ---------- Start ---------- */
+const lauf = new Schleife({ dt: DT, schritt: physikSchritt,
+                            bild: () => { szeneZeichnen(); achsenAnpassen(); diagramm.zeichnen(); messwerteZeigen(); } });
+bedienungEinrichten(lauf, { reset: () => { schritte.aus(); neuStart(); }, einzel: () => lauf.einzelschritt(0.05) });
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  const k = e.key.toLowerCase();
+  if (k === "s") schubsKnopf(); else if (k === "m") $("btnModell").click();
+});
+$("btnCSV").onclick = () => speichern("schaukel_messwerte.csv",
+  "t in s;s in m;v in m/s;a in m/s²;E_Lage in J;E_kin in J;E_innen in J\n" +
+  messreihe.map(z => z.map(w => w.toFixed(5).replace(".", ",")).join(";")).join("\n"), "text/csv");
+$("btnPNG").onclick = () => alsPNG("schaukel.png", [$("szene"), $("diagramm")]);
+schalter(); neuStart();
+</script>
+</body>
+</html>

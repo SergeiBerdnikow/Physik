@@ -1,0 +1,472 @@
+<title>Federpendel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Pendel auf der Schiene links, Regler und Messwerte rechts, darunter x(t), v(t), a(t) und Energien */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --ink: #18222e;
+  --muted: #5a6776;
+  --line: #d3dae2;
+  --grid: #e3e8ee;
+  --accent: #1f5fa8;
+  --scene: #f6f8fa;
+  --steel: #6b7480;
+  --block: #c9d6e4;
+  --xcol: #1f5fa8;   /* Auslenkung */
+  --vcol: #2f8a5b;   /* Geschwindigkeit */
+  --fcol: #c2412d;   /* Rückstellkraft */
+  --acol: #b7791f;   /* Beschleunigung */
+  --ghost: rgba(31,95,168,.35);
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --panel: #19212a; --ink: #e4e9ef; --muted: #96a3b1; --line: #2c3743; --grid: #222b35;
+    --accent: #6aa8ec; --scene: #151c24; --steel: #9aa4b0; --block: #34465a;
+    --xcol: #6aa8ec; --vcol: #5cc48d; --fcol: #f07a62; --acol: #e3ad55; --ghost: rgba(106,168,236,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --panel: #19212a; --ink: #e4e9ef; --muted: #96a3b1; --line: #2c3743; --grid: #222b35;
+  --accent: #6aa8ec; --scene: #151c24; --steel: #9aa4b0; --block: #34465a;
+  --xcol: #6aa8ec; --vcol: #5cc48d; --fcol: #f07a62; --acol: #e3ad55; --ghost: rgba(106,168,236,.35);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; margin: 0; padding: 0 16px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 24px 40px; display: flex; flex-direction: column; gap: 18px; }
+header { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(26px, 4vw, 36px); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.lead { margin: 0; color: var(--muted); max-width: 72ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.stage { padding: 0; overflow: hidden; }
+.stage canvas { display: block; width: 100%; height: 330px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; padding: 12px 14px; border-top: 1px solid var(--line); align-items: center; }
+.toolbar .spacer { flex: 1; }
+.toolbar label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+button, select { font: 500 14px var(--font-body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 7px 13px; cursor: pointer; }
+button:hover:not(:disabled), select:hover { border-color: var(--muted); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); min-width: 92px; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h2 { font-family: var(--font-display); font-size: 13px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+.ctrl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: baseline; margin-bottom: 14px; }
+.ctrl label { font-weight: 500; }
+.ctrl output { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+.ctrl input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+.quick { display: flex; flex-wrap: wrap; gap: 8px; }
+.quick button { font-size: 13px; padding: 5px 10px; }
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 6px 14px; }
+.checks label { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+.sw { display: inline-block; width: 18px; height: 0; border-top: 3px solid; border-radius: 2px; }
+.formula { font-family: var(--font-mono); font-size: 13.5px; background: var(--bg); border-radius: 6px; padding: 9px 11px; overflow-x: auto; white-space: nowrap; }
+.formula b { color: var(--accent); font-weight: 500; }
+.compare { margin-top: 10px; font-size: 14px; min-height: 1.5em; }
+.compare strong { font-family: var(--font-mono); font-weight: 500; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+td { text-align: right; padding: 5px 4px; border-bottom: 1px solid var(--line); font-size: 14px; }
+td:first-child { text-align: left; }
+td.num { font-family: var(--font-mono); white-space: nowrap; }
+td .sym { font-family: var(--font-mono); color: var(--muted); font-size: 13px; }
+.note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+.bottom { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 18px; align-items: stretch; }
+@media (max-width: 860px) { .bottom { grid-template-columns: minmax(0, 1fr); } }
+.graph canvas { display: block; width: 100%; height: 340px; }
+.energy canvas { display: block; width: 100%; height: 340px; }
+@media (max-width: 860px) { .energy canvas { height: 230px; } }
+.merk { font-size: 14px; }
+.merk ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 4px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Mechanische Schwingungen · Q1 Physik</span>
+    <h1>Federpendel</h1>
+    <p class="lead">Ein Körper der Masse <i>m</i> hängt an einer Feder mit der Federkonstante <i>D</i> und gleitet reibungsfrei. Er startet im rechten Umkehrpunkt. Blende die Größen ein und beobachte, wann sie null und wann sie maximal sind.</p>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <div class="card stage">
+        <canvas id="scene" aria-label="Federpendel auf einer Schiene"></canvas>
+        <div class="toolbar">
+          <button class="primary" id="play">Pause</button>
+          <button id="restart">Neu starten</button>
+          <button id="stepBtn" title="Eine Achtelperiode weiter">⅛ T weiter</button>
+          <span class="spacer"></span>
+          <label for="speed">Tempo
+            <select id="speed">
+              <option value="1">1×</option>
+              <option value="0.5">0,5×</option>
+              <option value="0.25">0,25×</option>
+              <option value="0.1">0,1×</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Größen anzeigen</h2>
+        <div class="checks">
+          <label><input type="checkbox" id="showX" checked> <span class="sw" style="border-color:var(--xcol)"></span> Auslenkung <i>x</i></label>
+          <label><input type="checkbox" id="showV" checked> <span class="sw" style="border-color:var(--vcol)"></span> Geschwindigkeit <i>v</i></label>
+          <label><input type="checkbox" id="showF" checked> <span class="sw" style="border-color:var(--fcol)"></span> Rückstellkraft <i>F</i></label>
+          <label><input type="checkbox" id="showA"> <span class="sw" style="border-color:var(--acol)"></span> Beschleunigung <i>a</i></label>
+          <label><input type="checkbox" id="showGhost"> <span class="sw" style="border-color:var(--ghost)"></span> Vergleich: halbe Amplitude</label>
+          <label><input type="checkbox" id="showVal" checked> Zahlenwerte an den Pfeilen</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card">
+        <h2>Einstellungen</h2>
+        <div class="ctrl"><label for="m">Masse <i>m</i></label><output id="mOut"></output><input type="range" id="m" min="0.1" max="2" step="0.05" value="0.5"></div>
+        <div class="ctrl"><label for="D">Federkonstante <i>D</i></label><output id="DOut"></output><input type="range" id="D" min="5" max="100" step="1" value="20"></div>
+        <div class="ctrl"><label for="A">Amplitude <i>x̂</i></label><output id="AOut"></output><input type="range" id="A" min="2" max="20" step="1" value="10"></div>
+        <div class="quick">
+          <button id="m4">m × 4</button>
+          <button id="D4">D × 4</button>
+          <button id="A2">x̂ × 2</button>
+          <button id="defaults">Startwerte</button>
+        </div>
+        <div class="compare" id="compare" aria-live="polite">Ändere eine Größe und vergleiche die Schwingungsdauer.</div>
+      </div>
+      <div class="card">
+        <h2>Schwingungsdauer</h2>
+        <div class="formula" id="formula"></div>
+        <table style="margin-top:8px">
+          <tr><td>gemessen (Umkehrpunkt bis Umkehrpunkt)</td><td class="num" id="Tmeas">–</td></tr>
+          <tr><td>Frequenz <span class="sym">f = 1/T</span></td><td class="num" id="fOut"></td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h2>Messwerte</h2>
+        <table>
+          <tr><td>Zeit <span class="sym">t</span></td><td class="num" id="tNow"></td><td class="num"></td></tr>
+          <tr><td>Auslenkung <span class="sym">x</span></td><td class="num" id="xNow"></td><td class="num" id="xMax"></td></tr>
+          <tr><td>Geschwindigkeit <span class="sym">v</span></td><td class="num" id="vNow"></td><td class="num" id="vMax"></td></tr>
+          <tr><td>Rückstellkraft <span class="sym">F</span></td><td class="num" id="FNow"></td><td class="num" id="FMax"></td></tr>
+          <tr><td>Beschleunigung <span class="sym">a</span></td><td class="num" id="aNow"></td><td class="num" id="aMax"></td></tr>
+        </table>
+        <p class="note">Rechte Spalte: Maximalwerte. Rechts ist die positive Richtung.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="card graph">
+      <h2>Zeit-Diagramme</h2>
+      <canvas id="graph" aria-label="x(t), v(t) und a(t)"></canvas>
+      <p class="note">Senkrechte Linien markieren Vielfache der Schwingungsdauer <i>T</i>. Die Kraft verläuft wie die Beschleunigung, denn <i>F</i> = <i>m</i> · <i>a</i>.</p>
+    </div>
+    <div class="card energy">
+      <h2>Energie</h2>
+      <canvas id="energy" aria-label="Energieverteilung"></canvas>
+    </div>
+  </div>
+
+  <div class="card merk">
+    <h2>Das Wichtigste</h2>
+    <ul>
+      <li>Die Rückstellkraft ist proportional zur Auslenkung und zeigt zur Ruhelage: <i>F</i> = −<i>D</i> · <i>x</i>. Deshalb schwingt das Federpendel harmonisch.</li>
+      <li><i>x</i>(<i>t</i>) = <i>x̂</i> · cos(<i>ω t</i>), <i>v</i>(<i>t</i>) = −<i>v̂</i> · sin(<i>ω t</i>), <i>a</i>(<i>t</i>) = −<i>â</i> · cos(<i>ω t</i>) mit <i>ω</i> = √(<i>D</i>/<i>m</i>).</li>
+      <li>Umkehrpunkte: <i>v</i> = 0, Kraft und Beschleunigung maximal. Ruhelage: <i>v</i> maximal, Kraft null.</li>
+      <li><i>T</i> = 2π · √(<i>m</i>/<i>D</i>) hängt nicht von der Amplitude ab. Größere Masse: langsamer. Härtere Feder: schneller.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const DEF = { m: 0.5, D: 20, A: 10 };
+const S = { m: DEF.m, D: DEF.D, A: DEF.A / 100, x: 0, v: 0, xg: 0, vg: 0, t: 0, playing: true, speed: 1,
+            hist: [], lastRev: null, Tmeas: null, prevT: null, dragBase: null };
+const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (reduce) S.playing = false;
+
+const nf = (v, d) => v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+const omega = () => Math.sqrt(S.D / S.m);
+const Tcalc = () => 2 * Math.PI * Math.sqrt(S.m / S.D);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function restart() {
+  S.x = S.A; S.v = 0; S.xg = S.A / 2; S.vg = 0; S.t = 0;
+  S.hist = [{ t: 0, x: S.x, v: 0, a: -S.D / S.m * S.x }];
+  S.lastRev = 0; S.Tmeas = null;
+  updateText();
+}
+
+// exakter Schritt der harmonischen Schwingung
+function adv(x, v, dt) {
+  const w = omega(), c = Math.cos(w * dt), s = Math.sin(w * dt);
+  return [x * c + v / w * s, -x * w * s + v * c];
+}
+function step(dt) {
+  const n = Math.max(1, Math.ceil(dt / 0.002)), h = dt / n;
+  for (let i = 0; i < n; i++) {
+    const [x1, v1] = adv(S.x, S.v, h);
+    if (S.v > 0 && v1 <= 0) { // rechter Umkehrpunkt erreicht
+      const tc = S.t + h * S.v / (S.v - v1);
+      if (S.lastRev !== null) S.Tmeas = tc - S.lastRev;
+      S.lastRev = tc;
+    }
+    S.x = x1; S.v = v1; S.t += h;
+    [S.xg, S.vg] = adv(S.xg, S.vg, h);
+  }
+  S.hist.push({ t: S.t, x: S.x, v: S.v, a: -S.D / S.m * S.x });
+  const tw = windowLen();
+  while (S.hist.length > 2 && S.hist[1].t < S.t - tw) S.hist.shift();
+}
+function windowLen() { return Math.max(2, Math.ceil(3 * Tcalc())); }
+
+// ---------- Regler ----------
+function syncInputs() {
+  $('m').value = S.m; $('D').value = S.D; $('A').value = Math.round(S.A * 100);
+  $('mOut').textContent = nf(S.m, 2) + ' kg';
+  $('DOut').textContent = nf(S.D, 0) + ' N/m';
+  $('AOut').textContent = nf(S.A * 100, 0) + ' cm';
+  $('m4').disabled = S.m * 4 > 2.0001;
+  $('D4').disabled = S.D * 4 > 100;
+  $('A2').disabled = S.A * 2 > 0.2001;
+}
+function showCompare() {
+  const el = $('compare');
+  if (S.prevT === null) { el.textContent = 'Ändere eine Größe und vergleiche die Schwingungsdauer.'; return; }
+  const T = Tcalc(), r = T / S.prevT;
+  let txt;
+  if (Math.abs(r - 1) < 0.005) txt = 'T bleibt gleich';
+  else txt = 'T ist jetzt das ' + nf(r, 2) + '-Fache';
+  el.innerHTML = 'Vorher <strong>T = ' + nf(S.prevT, 2) + ' s</strong>, jetzt <strong>T = ' + nf(T, 2) + ' s</strong>. ' + txt + '.';
+}
+function setParam(key, val, base) {
+  if (base === undefined) base = Tcalc();
+  S.prevT = base;
+  if (key === 'A') S.A = val; else S[key] = val;
+  syncInputs(); restart(); showCompare();
+}
+['m', 'D', 'A'].forEach(k => {
+  const el = $(k);
+  el.addEventListener('input', () => {
+    if (S.dragBase === null) S.dragBase = Tcalc();
+    const v = parseFloat(el.value);
+    if (k === 'A') S.A = v / 100; else S[k] = v;
+    S.prevT = S.dragBase;
+    syncInputs(); restart(); showCompare();
+  });
+  el.addEventListener('change', () => { S.dragBase = null; });
+});
+$('m4').onclick = () => setParam('m', Math.round(S.m * 4 * 100) / 100);
+$('D4').onclick = () => setParam('D', S.D * 4);
+$('A2').onclick = () => setParam('A', S.A * 2);
+$('defaults').onclick = () => { S.m = DEF.m; S.D = DEF.D; S.A = DEF.A / 100; S.prevT = null; syncInputs(); restart(); showCompare(); };
+$('play').onclick = () => { S.playing = !S.playing; $('play').textContent = S.playing ? 'Pause' : 'Start'; };
+$('restart').onclick = () => restart();
+$('stepBtn').onclick = () => { S.playing = false; $('play').textContent = 'Start'; step(Tcalc() / 8); updateText(); };
+$('speed').onchange = e => { S.speed = parseFloat(e.target.value); };
+['showX','showV','showF','showA','showGhost','showVal'].forEach(id => $(id).addEventListener('change', () => { if (!S.playing) drawAll(); }));
+
+// ---------- Texte ----------
+function updateText() {
+  const w = omega(), T = Tcalc();
+  $('formula').innerHTML = 'T = 2π·√(m/D) = 2π·√(' + nf(S.m, 2) + ' kg / ' + nf(S.D, 0) + ' N/m) = <b>' + nf(T, 2) + ' s</b>';
+  $('fOut').textContent = nf(1 / T, 2) + ' Hz';
+  $('Tmeas').textContent = S.Tmeas === null ? 'läuft …' : nf(S.Tmeas, 2) + ' s';
+  const a = -S.D / S.m * S.x, F = -S.D * S.x;
+  $('tNow').textContent = nf(S.t, 2) + ' s';
+  $('xNow').textContent = nf(S.x * 100, 1) + ' cm';
+  $('vNow').textContent = nf(S.v, 2) + ' m/s';
+  $('FNow').textContent = nf(F, 2) + ' N';
+  $('aNow').textContent = nf(a, 2) + ' m/s²';
+  $('xMax').textContent = 'x̂ = ' + nf(S.A * 100, 1) + ' cm';
+  $('vMax').textContent = 'v̂ = ' + nf(S.A * w, 2) + ' m/s';
+  $('FMax').textContent = 'F̂ = ' + nf(S.D * S.A, 2) + ' N';
+  $('aMax').textContent = 'â = ' + nf(S.A * w * w, 2) + ' m/s²';
+}
+
+// ---------- Zeichnen ----------
+function fit(cv) {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return [c, r.width, r.height];
+}
+function arrow(c, x0, y, len, col, label, maxLen) {
+  if (Math.abs(len) < 1.5) return;
+  const clipped = Math.abs(len) > maxLen;
+  const L = clipped ? Math.sign(len) * maxLen : len, dir = Math.sign(L), x1 = x0 + L;
+  c.strokeStyle = col; c.fillStyle = col; c.lineWidth = 3.5; c.lineCap = 'round';
+  c.setLineDash(clipped ? [7, 4] : []);
+  c.beginPath(); c.moveTo(x0, y); c.lineTo(x1 - dir * 8, y); c.stroke(); c.setLineDash([]);
+  c.beginPath(); c.moveTo(x1, y); c.lineTo(x1 - dir * 12, y - 7); c.lineTo(x1 - dir * 12, y + 7); c.closePath(); c.fill();
+  if (label) {
+    c.font = '500 12.5px ' + css('--font-mono'); c.textBaseline = 'middle';
+    const tw = c.measureText(label).width, W = c.canvas.getBoundingClientRect().width;
+    let lx = x1 + dir * 6, al = dir > 0 ? 'left' : 'right';
+    if (dir > 0 && lx + tw > W - 4) { lx = W - 4; al = 'right'; y -= 14; }
+    if (dir < 0 && lx - tw < 4) { lx = 4; al = 'left'; y -= 14; }
+    c.textAlign = al; c.fillText(label, lx, y);
+  }
+}
+function spring(c, x0, x1, y, turns, amp, lw, col) {
+  c.strokeStyle = col; c.lineWidth = lw; c.lineJoin = 'round';
+  const lead = 12, len = x1 - x0 - 2 * lead;
+  c.beginPath(); c.moveTo(x0, y); c.lineTo(x0 + lead, y);
+  for (let i = 0; i < turns * 2; i++) c.lineTo(x0 + lead + len * (i + 0.5) / (turns * 2), y + (i % 2 ? amp : -amp));
+  c.lineTo(x1 - lead, y); c.lineTo(x1, y); c.stroke();
+}
+
+function drawScene() {
+  const [c, W, H] = fit($('scene'));
+  c.fillStyle = css('--scene'); c.fillRect(0, 0, W, H);
+  const ghost = $('showGhost').checked;
+  const wall = 28, L0 = 0.30, Amax = 0.20;
+  const bw = 0.05 + 0.05 * Math.cbrt(S.m / 2); // Blockbreite wächst mit der Masse
+  const s = (W - wall - 24) / (L0 + Amax + 0.10 + 0.02); // Pixel pro Meter
+  const eq = wall + (L0 + bw / 2) * s;                     // Ruhelage (Blockmitte)
+  const ink = css('--ink'), muted = css('--muted'), steel = css('--steel');
+  const tracks = ghost ? [H * 0.36, H * 0.80] : [H * 0.52];
+
+  // Hilfslinien
+  c.font = '500 12px ' + css('--font-mono'); c.textAlign = 'center'; c.textBaseline = 'top';
+  const top = 16, bot = H - 22;
+  c.strokeStyle = muted; c.lineWidth = 1;
+  c.setLineDash([5, 4]); c.beginPath(); c.moveTo(eq, top); c.lineTo(eq, bot); c.stroke();
+  c.setLineDash([2, 4]);
+  [-1, 1].forEach(k => { c.beginPath(); c.moveTo(eq + k * S.A * s, top); c.lineTo(eq + k * S.A * s, bot); c.stroke(); });
+  c.setLineDash([]);
+  c.fillStyle = muted;
+  c.fillText('Ruhelage', eq, bot + 4);
+  c.fillText('−x̂', eq - S.A * s, bot + 4); c.fillText('+x̂', eq + S.A * s, bot + 4);
+
+  tracks.forEach((ty, i) => {
+    const isG = i === 1;
+    const x = isG ? S.xg : S.x, v = isG ? S.vg : S.v;
+    const bh = Math.min(54, bw * s * 0.9), cx = eq + x * s, left = cx - bw * s / 2;
+    // Wand und Schiene
+    c.fillStyle = steel; c.fillRect(wall - 10, ty - 62, 10, 70);
+    c.strokeStyle = steel; c.lineWidth = 2; c.beginPath(); c.moveTo(wall, ty + 8); c.lineTo(W - 10, ty + 8); c.stroke();
+    // Feder: Strichstärke zeigt D
+    spring(c, wall, left, ty - bh / 2 + 4, 14, 9, 1.2 + S.D / 30, isG ? css('--ghost') : ink);
+    // Block: Größe zeigt m
+    c.fillStyle = isG ? css('--ghost') : css('--block');
+    c.strokeStyle = isG ? css('--ghost') : ink; c.lineWidth = 1.5;
+    c.beginPath(); c.roundRect(left, ty + 8 - bh, bw * s, bh, 4); c.fill(); c.stroke();
+    c.fillStyle = ink; c.textBaseline = 'middle'; c.textAlign = 'center'; c.font = '600 13px ' + css('--font-body');
+    c.fillText(isG ? 'x̂/2' : 'm', cx, ty + 8 - bh / 2);
+    if (isG) return;
+
+    const showVal = $('showVal').checked, mono = '500 12.5px ' + css('--font-mono');
+    c.font = mono;
+    if ($('showX').checked) {
+      const y = ty + 22;
+      c.strokeStyle = css('--xcol'); c.fillStyle = css('--xcol'); c.lineWidth = 2;
+      c.beginPath(); c.moveTo(eq, y - 5); c.lineTo(eq, y + 5); c.stroke();
+      arrow(c, eq, y, x * s, css('--xcol'), showVal ? 'x = ' + nf(x * 100, 1) + ' cm' : 'x', 9999);
+    }
+    const maxL = Math.min(170, W * 0.3);
+    if ($('showV').checked) {
+      const L = v * 150;
+      if (Math.abs(L) < 1.5) { c.fillStyle = css('--vcol'); c.textAlign = 'center'; c.fillText('v = 0', cx, ty + 8 - bh - 16); }
+      else arrow(c, cx, ty + 8 - bh - 16, L, css('--vcol'), showVal ? 'v = ' + nf(v, 2) + ' m/s' : 'v', maxL);
+    }
+    const F = -S.D * x, a = F / S.m;
+    if ($('showF').checked) {
+      const y = ty + 8 - bh - ($('showV').checked ? 40 : 16);
+      if (Math.abs(F * 40) < 1.5) { c.fillStyle = css('--fcol'); c.textAlign = 'center'; c.fillText('F = 0', cx, y); }
+      else arrow(c, cx, y, F * 40, css('--fcol'), showVal ? 'F = ' + nf(F, 2) + ' N' : 'F', maxL);
+    }
+    if ($('showA').checked) {
+      const y = ty + ($('showX').checked ? 46 : 26);
+      if (Math.abs(a * 20) < 1.5) { c.fillStyle = css('--acol'); c.textAlign = 'center'; c.fillText('a = 0', cx, y); }
+      else arrow(c, cx, y, a * 20, css('--acol'), showVal ? 'a = ' + nf(a, 2) + ' m/s²' : 'a', maxL);
+    }
+  });
+}
+
+function drawGraph() {
+  const [c, W, H] = fit($('graph'));
+  c.clearRect(0, 0, W, H);
+  const padL = 56, padR = 14, padT = 6, gap = 14, padB = 24;
+  const rows = [
+    { k: 'x', f: p => p.x * 100, max: S.A * 100, col: css('--xcol'), lab: 'x in cm' },
+    { k: 'v', f: p => p.v, max: S.A * omega(), col: css('--vcol'), lab: 'v in m/s' },
+    { k: 'a', f: p => p.a, max: S.A * omega() ** 2, col: css('--acol'), lab: 'a in m/s²' }
+  ];
+  const rh = (H - padT - padB - gap * 2) / 3, gw = W - padL - padR;
+  const tw = windowLen(), t0 = Math.max(0, S.t - tw), T = Tcalc();
+  const X = t => padL + (t - t0) / tw * gw;
+  const muted = css('--muted'), grid = css('--grid'), line = css('--line');
+  c.font = '500 11.5px ' + css('--font-mono');
+  rows.forEach((r, i) => {
+    const y0 = padT + i * (rh + gap), mid = y0 + rh / 2, sc = (rh / 2 - 6) / (r.max * 1.08 || 1);
+    c.strokeStyle = grid; c.lineWidth = 1;
+    for (let k = Math.ceil(t0 / T); k * T <= t0 + tw; k++) { if (k <= 0) continue; const xx = X(k * T); c.beginPath(); c.moveTo(xx, y0); c.lineTo(xx, y0 + rh); c.stroke(); }
+    c.strokeStyle = line; c.beginPath(); c.moveTo(padL, mid); c.lineTo(W - padR, mid); c.stroke();
+    c.beginPath(); c.moveTo(padL, y0); c.lineTo(padL, y0 + rh); c.stroke();
+    c.fillStyle = muted; c.textAlign = 'right'; c.textBaseline = 'middle';
+    c.fillText(nf(r.max, r.k === 'x' ? 0 : 1), padL - 6, mid - r.max * sc);
+    c.fillText('0', padL - 6, mid);
+    c.fillText(nf(-r.max, r.k === 'x' ? 0 : 1), padL - 6, mid + r.max * sc);
+    c.textAlign = 'left'; c.textBaseline = 'top'; c.font = '600 12px ' + css('--font-body');
+    c.fillStyle = css('--panel'); c.globalAlpha = .85; c.fillRect(padL + 3, y0, c.measureText(r.lab).width + 6, 16); c.globalAlpha = 1;
+    c.fillStyle = r.col; c.fillText(r.lab, padL + 6, y0 + 1); c.font = '500 11.5px ' + css('--font-mono');
+    c.strokeStyle = r.col; c.lineWidth = 2.2; c.lineJoin = 'round'; c.beginPath();
+    S.hist.forEach((p, j) => { const xx = X(p.t), yy = mid - r.f(p) * sc; j ? c.lineTo(xx, yy) : c.moveTo(xx, yy); });
+    c.stroke();
+    const last = S.hist[S.hist.length - 1];
+    if (last) { c.fillStyle = r.col; c.beginPath(); c.arc(X(last.t), mid - r.f(last) * sc, 4, 0, 7); c.fill(); }
+  });
+  c.fillStyle = muted; c.textAlign = 'center'; c.textBaseline = 'top';
+  for (let k = Math.ceil(t0 / T); k * T <= t0 + tw; k++) { if (k <= 0) continue; c.fillText(k === 1 ? 'T' : k + 'T', X(k * T), H - padB + 6); }
+  if (W >= 520) c.textAlign = 'right', c.fillText('t in s: ' + nf(t0, 1) + ' … ' + nf(t0 + tw, 1), W - padR, H - padB + 6);
+}
+
+function drawEnergy() {
+  const [c, W, H] = fit($('energy'));
+  c.clearRect(0, 0, W, H);
+  const Eges = 0.5 * S.D * S.A * S.A, Ek = 0.5 * S.m * S.v * S.v, Es = 0.5 * S.D * S.x * S.x;
+  const bars = [
+    { lab: 'E_kin', v: Ek, col: css('--vcol') },
+    { lab: 'E_Spann', v: Es, col: css('--fcol') },
+    { lab: 'E_ges', v: Eges, col: css('--muted') }
+  ];
+  const top = 10, bot = H - 52, bw = Math.min(46, (W - 40) / 4), gapx = (W - 3 * bw) / 4;
+  c.strokeStyle = css('--line'); c.lineWidth = 1; c.beginPath(); c.moveTo(8, bot); c.lineTo(W - 8, bot); c.stroke();
+  bars.forEach((b, i) => {
+    const x = gapx + i * (bw + gapx), h = Eges > 0 ? b.v / Eges * (bot - top) : 0;
+    c.fillStyle = b.col; c.globalAlpha = i === 2 ? .35 : .9; c.fillRect(x, bot - h, bw, h); c.globalAlpha = 1;
+    c.fillStyle = css('--ink'); c.font = '600 12px ' + css('--font-body'); c.textAlign = 'center'; c.textBaseline = 'top';
+    c.fillText(b.lab.replace('_', ' '), x + bw / 2, bot + 6);
+    c.font = '500 11.5px ' + css('--font-mono'); c.fillStyle = css('--muted');
+    c.fillText(nf(b.v * 1000, 0) + ' mJ', x + bw / 2, bot + 24);
+  });
+}
+
+function drawAll() { drawScene(); drawGraph(); drawEnergy(); }
+
+let last = null, acc = 0;
+function frame(ts) {
+  if (last === null) last = ts;
+  const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
+  if (S.playing) { step(dt * S.speed); acc += dt; if (acc > 0.1) { updateText(); acc = 0; } }
+  drawAll();
+  requestAnimationFrame(frame);
+}
+if (!S.playing) $('play').textContent = 'Start';
+syncInputs(); restart(); drawAll();
+requestAnimationFrame(frame);
+})();
+</script>

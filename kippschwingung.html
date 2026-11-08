@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+<title>Kippschwingung am Überlauf</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Becken mit Überlaufrohr links, Regler und Messwerte rechts, darunter Füllhöhe über der Zeit und Auswertung */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --ink: #18222e;
+  --muted: #5a6776;
+  --line: #d3dae2;
+  --grid: #e3e8ee;
+  --accent: #1f5fa8;
+  --water: #3d8fd6;
+  --water-deep: #1e5e9f;
+  --glass: #8fa3b8;
+  --pipe: #6b7480;
+  --drain: #c2412d;       /* Entleerphase */
+  --drain-tint: rgba(194,65,45,.10);
+  --ok: #2f8a5b;
+  --scene: #f6f8fa;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --panel: #19212a; --ink: #e4e9ef; --muted: #96a3b1; --line: #2c3743; --grid: #222b35;
+    --accent: #6aa8ec; --water: #3f8fd0; --water-deep: #1d4f86; --glass: #7f93a8; --pipe: #9aa4b0;
+    --drain: #f07a62; --drain-tint: rgba(240,122,98,.12); --ok: #5cc48d; --scene: #151c24;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --panel: #19212a; --ink: #e4e9ef; --muted: #96a3b1; --line: #2c3743; --grid: #222b35;
+  --accent: #6aa8ec; --water: #3f8fd0; --water-deep: #1d4f86; --glass: #7f93a8; --pipe: #9aa4b0;
+  --drain: #f07a62; --drain-tint: rgba(240,122,98,.12); --ok: #5cc48d; --scene: #151c24;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; padding: 0 16px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 24px 40px; display: flex; flex-direction: column; gap: 18px; }
+header { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(26px, 4vw, 36px); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.lead { margin: 0; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 820px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.stage { padding: 0; overflow: hidden; }
+.stage canvas { display: block; width: 100%; height: 470px; }
+@media (max-width: 520px) { .stage canvas { height: 380px; } }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; padding: 12px 14px; border-top: 1px solid var(--line); align-items: center; }
+button, select { font: 500 14px var(--font-body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 7px 13px; cursor: pointer; }
+button:hover, select:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); min-width: 92px; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.toolbar .spacer { flex: 1; }
+.toolbar label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+h2 { font-family: var(--font-display); font-size: 13px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+.ctrl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: baseline; margin-bottom: 14px; }
+.ctrl label { font-weight: 500; }
+.ctrl output { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+.ctrl input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+.checks label { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid currentColor; margin-top: 12px; }
+.badge.ok { color: var(--ok); }
+.badge.bad { color: var(--drain); }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+td { text-align: right; padding: 6px 4px; border-bottom: 1px solid var(--line); font-size: 14px; }
+td:first-child { text-align: left; }
+td.num { font-family: var(--font-mono); white-space: nowrap; }
+.note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+.graph canvas { display: block; width: 100%; height: 250px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 22px; height: 0; border-top: 2.5px solid; vertical-align: middle; margin-right: 6px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.explain { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+.explain h3 { font-family: var(--font-display); font-size: 17px; margin: 0 0 6px; }
+.explain p { margin: 0 0 8px; max-width: 65ch; }
+.explain ul { margin: 0 0 8px; padding-left: 20px; }
+.formula { font-family: var(--font-mono); font-size: 13.5px; background: var(--bg); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: nowrap; margin-bottom: 6px; }
+.src { font-size: 12.5px; color: var(--muted); margin: 14px 0 0; }
+.src a { color: var(--accent); }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Q1 · Mechanische Schwingungen</span>
+    <h1>Kippschwingung am Überlauf</h1>
+    <p class="lead">Ein Becken wird gleichmäßig gefüllt. Erreicht das Wasser den höchsten Punkt des gebogenen Überlaufrohrs, springt der Heber an und leert das Becken schnell, bis Luft in das Rohr gelangt. Danach beginnt das Füllen von vorn.</p>
+  </header>
+
+  <div class="grid">
+    <section class="card stage" aria-label="Becken mit Überlaufrohr">
+      <canvas id="scene" aria-label="Animation: Becken mit Zulauf und Überlaufrohr"></canvas>
+      <div class="toolbar">
+        <button id="play" class="primary">Start</button>
+        <button id="reset">Zurücksetzen</button>
+        <span class="spacer"></span>
+        <label for="speed">Zeitraffer
+          <select id="speed">
+            <option value="1">1×</option>
+            <option value="5">5×</option>
+            <option value="10" selected>10×</option>
+            <option value="30">30×</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <div class="side">
+      <section class="card">
+        <h2>Einstellungen</h2>
+        <div class="ctrl">
+          <label for="qin">Zufluss</label><output id="qinOut"></output>
+          <input type="range" id="qin" min="2" max="40" step="1" value="10">
+        </div>
+        <div class="ctrl">
+          <label for="qout">Abfluss durch das Rohr</label><output id="qoutOut"></output>
+          <input type="range" id="qout" min="4" max="80" step="1" value="40">
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="torr"> Abfluss hängt von der Füllhöhe ab (realistischer, sonst konstant wie in der Aufgabe)</label>
+        </div>
+        <div id="cond" class="badge ok"></div>
+      </section>
+
+      <section class="card">
+        <h2>Messwerte</h2>
+        <table>
+          <tbody>
+            <tr><td>Füllhöhe h</td><td class="num" id="mH">–</td></tr>
+            <tr><td>Phase</td><td class="num" id="mPhase">–</td></tr>
+            <tr><td>Füllzeit</td><td class="num" id="mFill">–</td></tr>
+            <tr><td>Entleerzeit</td><td class="num" id="mDrain">–</td></tr>
+            <tr><td>Periodendauer gemessen</td><td class="num" id="mT">–</td></tr>
+            <tr><td>Periodendauer berechnet</td><td class="num" id="mTcalc">–</td></tr>
+          </tbody>
+        </table>
+        <p class="note">Becken: Grundfläche 0,12 m². Das Rohr saugt ab 30 cm Füllhöhe und reißt bei 5 cm ab, dazwischen liegen 30 Liter.</p>
+      </section>
+    </div>
+  </div>
+
+  <section class="card graph" aria-label="Füllhöhe über der Zeit">
+    <h2>Füllhöhe h über der Zeit t</h2>
+    <canvas id="plot" aria-label="Zeit-Füllhöhe-Diagramm"></canvas>
+    <div class="legend">
+      <span><i style="border-color:var(--water)"></i>Füllhöhe h</span>
+      <span><span class="sw" style="background:var(--drain-tint);border:1px solid var(--drain)"></span>Rohr saugt, Becken leert sich</span>
+      <span><i style="border-color:var(--muted);border-top-style:dashed"></i>Scheitel des Rohrs und Rohreinlass</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Auswertung</h2>
+    <div class="explain">
+      <div>
+        <h3>a) Ablauf</h3>
+        <p>Der Zufluss hebt den Wasserspiegel im Becken. Im linken Schenkel des Rohrs steigt das Wasser mit, denn Becken und Rohr sind verbundene Gefäße. Erreicht der Spiegel den Scheitel des Rohrs, läuft Wasser über und füllt das ganze Rohr: Es wirkt als Saugheber. Das Becken leert sich schnell, bis der Spiegel unter das linke Rohrende fällt. Dann dringt Luft ein, der Heber reißt ab und das Füllen beginnt von vorn.</p>
+      </div>
+      <div>
+        <h3>Bedingungen</h3>
+        <ul>
+          <li>Der Zufluss muss gleichmäßig sein.</li>
+          <li>Durch das Rohr muss mehr Wasser abfließen als zufließt. Sonst stellt sich ein Gleichgewicht ein und das Becken schwingt nicht. Probiere es mit den Reglern aus.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>b) Sägezahnprofil</h3>
+        <p>Bei konstanten Strömen steigt h linear an und fällt danach steiler linear ab. Mit den Startwerten dauert das Füllen 3 min und das Entleeren 1 min.</p>
+        <div class="formula">t<sub>Füllen</sub> = V / Q<sub>zu</sub> = 30 L / (10 L/min) = 3 min</div>
+        <div class="formula">t<sub>Leeren</sub> = V / (Q<sub>ab</sub> − Q<sub>zu</sub>) = 30 L / (30 L/min) = 1 min</div>
+        <div class="formula">T = 3 min + 1 min = 4 min</div>
+        <p>Eine solche Schwingung heißt Kippschwingung. Sie ist periodisch, aber nicht harmonisch.</p>
+      </div>
+    </div>
+    <p class="src">Grundlage: Aufgabe „Kippschwingung beim Überlauf“ auf <a href="https://www.leifiphysik.de/mechanik/mechanische-schwingungen/aufgabe/kippschwingung-beim-ueberlauf" target="_blank" rel="noopener">LEIFIphysik</a>. Beckenmaße und Ströme sind so gewählt, dass die Zeiten aus Teil b) herauskommen.</p>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const fmt = (v, d = 1) => v.toFixed(d).replace('.', ',');
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const A = 0.12;          // m², Grundfläche
+  const H_LOW = 0.05;      // m, Rohreinlass
+  const H_TOP = 0.30;      // m, Scheitel des Rohrs
+  const H_WALL = 0.40;     // m, Beckenrand
+  const DROP = 0.30;       // m, Auslass unter dem Beckenboden
+  const V = A * (H_TOP - H_LOW) * 1000; // L
+  const WINDOW = 12 * 60;  // s im Diagramm
+
+  let qin, qout, torr;     // L/min
+  let h, active, t, running = false, speed = 10;
+  let hist, ev, overflow;
+
+  const fmtTime = s => {
+    if (!isFinite(s)) return '–';
+    if (s >= 60) { const n = Math.round(s), m = Math.floor(n / 60); return m + ' min ' + String(n - 60 * m).padStart(2, '0') + ' s'; }
+    return fmt(s, 1) + ' s';
+  };
+
+  function qOut(hh) { // L/min
+    if (!torr) return qout;
+    return qout * Math.sqrt(Math.max(hh + DROP, 0) / (H_TOP + DROP));
+  }
+
+  function readParams() {
+    qin = +$('qin').value; qout = +$('qout').value; torr = $('torr').checked;
+    $('qinOut').textContent = qin + ' L/min';
+    $('qoutOut').textContent = qout + ' L/min' + (torr ? ' (bei 30 cm)' : '');
+    const minOut = torr ? qOut(H_LOW) : qout;
+    const ok = minOut > qin;
+    const c = $('cond');
+    c.className = 'badge ' + (ok ? 'ok' : 'bad');
+    c.textContent = ok ? 'Abfluss größer als Zufluss: Kippschwingung' : 'Abfluss zu klein: keine Kippschwingung';
+    // berechnete Periode
+    let Tc = Infinity;
+    if (ok) {
+      const tf = V / qin * 60;
+      let td;
+      if (!torr) td = V / (qout - qin) * 60;
+      else { td = 0; const n = 400, dh = (H_TOP - H_LOW) / n; for (let i = 0; i < n; i++) { const hh = H_TOP - (i + .5) * dh; td += A * 1000 * dh / ((qOut(hh) - qin) / 60); } }
+      Tc = tf + td;
+      $('mTcalc').textContent = fmtTime(Tc) + ' (' + fmtTime(tf) + ' + ' + fmtTime(td) + ')';
+    } else $('mTcalc').textContent = 'keine Periode';
+  }
+
+  function reset() {
+    readParams();
+    h = H_LOW; active = false; t = 0; overflow = false;
+    hist = [{ t: 0, h, active }];
+    ev = { off: 0, on: null, fill: null, drain: null };
+    updateTable(); draw();
+  }
+
+  function step(dt) {
+    const out = active ? qOut(h) : 0;
+    h += (qin - out) / 60 / 1000 / A * dt;
+    overflow = false;
+    if (h >= H_WALL) { h = H_WALL; overflow = true; }
+    if (!active && h >= H_TOP) { active = true; if (ev.off != null && t > 0) ev.fill = t - ev.off; ev.on = t; }
+    if (active && h <= H_LOW) { active = false; h = H_LOW; if (ev.on != null) ev.drain = t - ev.on; ev.off = t; }
+    t += dt;
+  }
+
+  function updateTable() {
+    $('mH').textContent = fmt(h * 100, 1) + ' cm';
+    $('mPhase').textContent = overflow ? 'läuft über den Rand' : active ? (qOut(h) > qin ? 'Entleeren' : 'Gleichgewicht') : 'Füllen';
+    $('mFill').textContent = ev.fill != null ? fmtTime(ev.fill) : '–';
+    $('mDrain').textContent = ev.drain != null ? fmtTime(ev.drain) : '–';
+    $('mT').textContent = ev.fill != null && ev.drain != null ? fmtTime(ev.fill + ev.drain) : '–';
+  }
+
+  // ---------- Zeichnen ----------
+  function fit(cv) {
+    const ctx = cv.getContext('2d'), dpr = window.devicePixelRatio || 1;
+    const w = cv.clientWidth, hh = cv.clientHeight;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(hh * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(hh * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return [ctx, w, hh];
+  }
+
+  function drawScene() {
+    const [x, w, H] = fit($('scene'));
+    const now = performance.now() / 1000;
+    x.fillStyle = css('--scene'); x.fillRect(0, 0, w, H);
+    const ink = css('--ink'), muted = css('--muted'), water = css('--water'), deep = css('--water-deep'),
+          glass = css('--glass'), pipe = css('--pipe'), drain = css('--drain');
+
+    // Geometrie: Meter → Pixel
+    const s = Math.min((H - 90) / (H_WALL + DROP + 0.12), (w - 40) / 1.15);
+    const floorY = 70 + H_WALL * s;
+    const bx0 = Math.max(150, w * 0.5 - 0.36 * s), bx1 = bx0 + 0.5 * s;   // Becken innen
+    const Y = hh => floorY - hh * s;
+    const wallT = 6;
+
+    // Tisch/Boden
+    x.fillStyle = css('--line');
+    x.fillRect(bx0 - wallT - 20, floorY + wallT, bx1 - bx0 + 2 * wallT + 40, 8);
+
+    // Wasser im Becken
+    const surfY = Y(h);
+    const grad = x.createLinearGradient(0, surfY, 0, floorY);
+    grad.addColorStop(0, water); grad.addColorStop(1, deep);
+    x.fillStyle = grad;
+    x.beginPath(); x.moveTo(bx0, floorY);
+    const amp = 1.6 + (active ? 1.2 : 0.6);
+    for (let px = bx0; px <= bx1; px += 4) x.lineTo(px, surfY + Math.sin(px * 0.06 + now * 4) * amp);
+    x.lineTo(bx1, floorY); x.closePath(); x.fill();
+
+    // Zulauf: Hahn oben links
+    const tapX = bx0 + 0.09 * s, tapY = 34;
+    x.fillStyle = pipe;
+    x.fillRect(bx0 - 0.18 * s, tapY - 10, tapX - bx0 + 0.18 * s + 8, 12);
+    x.fillRect(tapX - 4, tapY - 10, 12, 22);
+    x.fillStyle = drain; x.fillRect(tapX - 8, tapY - 20, 20, 6); // Griff
+    const sw = 2 + qin / 40 * 9;
+    x.fillStyle = water; x.globalAlpha = .85;
+    x.fillRect(tapX + 2 - sw / 2, tapY + 12, sw, surfY - tapY - 12);
+    x.globalAlpha = 1;
+    // Tropfen im Strahl
+    x.fillStyle = css('--panel'); x.globalAlpha = .55;
+    for (let k = 0; k < 6; k++) { const yy = tapY + 14 + ((now * 260 + k * 37) % Math.max(surfY - tapY - 16, 1)); x.fillRect(tapX + 2 - sw / 4, yy, sw / 2, 4); }
+    x.globalAlpha = 1;
+
+    // Überlaufrohr (Saugheber): linker Schenkel im Becken, Scheitel bei H_TOP, rechter Schenkel außen
+    const pr = 7;                         // halbe Rohrbreite
+    const lx = bx1 - 0.08 * s;            // linker Schenkel
+    const rx = bx1 + 0.08 * s;            // rechter Schenkel außen
+    const cy = Y(H_TOP) + (rx - lx) / 2 - pr; // Bogenmitte so, dass die Innenkante unten am Scheitel bei 30 cm liegt
+    const outY = Y(-DROP);
+    const pipePath = () => {
+      x.beginPath();
+      x.moveTo(lx, Y(H_LOW)); x.lineTo(lx, cy);
+      x.arc((lx + rx) / 2, cy, (rx - lx) / 2, Math.PI, 0);
+      x.lineTo(rx, outY);
+    };
+    // Rohrwand
+    x.lineCap = 'butt'; x.lineJoin = 'round';
+    x.strokeStyle = pipe; x.lineWidth = 2 * pr + 4; pipePath(); x.stroke();
+    x.strokeStyle = css('--scene'); x.lineWidth = 2 * pr - 2; pipePath(); x.stroke();
+    // Wasser im Rohr
+    x.strokeStyle = water; x.lineWidth = 2 * pr - 2;
+    if (active) { pipePath(); x.stroke(); }
+    else if (h > H_LOW) { x.beginPath(); x.moveTo(lx, Y(H_LOW)); x.lineTo(lx, Math.max(Y(h), Y(H_TOP))); x.stroke(); }
+
+    // Beckenwände (Glas), Rohr geht durch die rechte Wand
+    x.fillStyle = glass;
+    x.fillRect(bx0 - wallT, Y(H_WALL), wallT, H_WALL * s + wallT);
+    x.fillRect(bx0 - wallT, floorY, bx1 - bx0 + 2 * wallT, wallT);
+    const holeTop = cy - (rx - lx) / 2 - pr - 2, holeBot = holeTop + 2 * pr + 4;
+    x.fillRect(bx1, Y(H_WALL), wallT, holeTop - Y(H_WALL));
+    x.fillRect(bx1, holeBot, wallT, floorY - holeBot + wallT);
+
+    // Auffangbecken
+    const tx0 = rx - 0.12 * s, tx1 = rx + 0.2 * s, tyB = outY + 0.12 * s;
+    x.fillStyle = water; x.globalAlpha = .55;
+    x.fillRect(tx0, tyB - 0.05 * s, tx1 - tx0, 0.05 * s); x.globalAlpha = 1;
+    x.strokeStyle = glass; x.lineWidth = 4;
+    x.beginPath(); x.moveTo(tx0, outY + 0.03 * s); x.lineTo(tx0, tyB); x.lineTo(tx1, tyB); x.lineTo(tx1, outY + 0.03 * s); x.stroke();
+    if (active) {
+      const jw = 2 * pr - 4;
+      x.fillStyle = water; x.fillRect(rx - jw / 2, outY, jw, tyB - 0.05 * s - outY);
+      x.fillStyle = css('--panel'); x.globalAlpha = .5;
+      for (let k = 0; k < 4; k++) { const yy = outY + ((now * 300 + k * 23) % Math.max(tyB - outY - 0.05 * s, 1)); x.fillRect(rx - jw / 4, yy, jw / 2, 4); }
+      x.globalAlpha = 1;
+    }
+
+    // Markierungen
+    x.font = '500 12px ' + css('--font-body'); x.textBaseline = 'middle';
+    const mark = (hh, label) => {
+      x.strokeStyle = muted; x.setLineDash([4, 4]); x.lineWidth = 1;
+      x.beginPath(); x.moveTo(bx0 - 30, Y(hh)); x.lineTo(lx - pr - 3, Y(hh)); x.stroke(); x.setLineDash([]);
+      x.fillStyle = muted; x.textAlign = 'right'; x.fillText(label, bx0 - 34, Y(hh));
+    };
+    mark(H_TOP, 'Scheitel 30 cm');
+    mark(H_LOW, 'Rohreinlass 5 cm');
+    // Messlatte
+    x.strokeStyle = ink; x.fillStyle = ink; x.lineWidth = 1; x.textAlign = 'left';
+    x.font = '10px ' + css('--font-mono');
+    for (let c = 0; c <= 40; c += 5) {
+      const yy = Y(c / 100), len = c % 10 === 0 ? 8 : 4;
+      x.beginPath(); x.moveTo(bx0, yy); x.lineTo(bx0 + len, yy); x.stroke();
+      if (c % 10 === 0 && c > 0) x.fillText(c + '', bx0 + 11, yy);
+    }
+
+    // Zustandstext
+    x.font = '600 14px ' + css('--font-body'); x.textAlign = 'right'; x.textBaseline = 'top';
+    let st, col = ink;
+    if (overflow) { st = 'Becken läuft über'; col = drain; }
+    else if (active) { st = qOut(h) > qin ? 'Rohr saugt: Becken leert sich' : 'Gleichgewicht: Zufluss = Abfluss'; col = qOut(h) > qin ? drain : css('--ok'); }
+    else st = 'Füllen';
+    x.fillStyle = col; x.fillText(st, w - 14, 12);
+    x.fillStyle = muted; x.font = '500 13px ' + css('--font-mono');
+    x.fillText('t = ' + fmtTime(t), w - 14, 32);
+    x.fillText('h = ' + fmt(h * 100, 1) + ' cm', w - 14, 50);
+  }
+
+  function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / p; return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * p; }
+
+  function drawPlot() {
+    const [x, w, H] = fit($('plot'));
+    x.clearRect(0, 0, w, H);
+    const muted = css('--muted'), grid = css('--grid'), line = css('--line');
+    const ml = 56, mr = 14, mt = 10, mb = 28, pw = w - ml - mr, ph = H - mt - mb;
+    const t1 = Math.max(WINDOW, t), t0 = t1 - WINDOW;
+    const X = tt => ml + (tt - t0) / WINDOW * pw, Yp = hh => mt + (1 - hh / H_WALL) * ph;
+
+    // Entleerphasen
+    x.fillStyle = css('--drain-tint');
+    let st = null;
+    for (const p of hist) {
+      if (p.t < t0) continue;
+      if (p.active && st === null) st = p.t;
+      if (!p.active && st !== null) { x.fillRect(X(st), mt, X(p.t) - X(st), ph); st = null; }
+    }
+    if (st !== null) x.fillRect(X(st), mt, X(t) - X(st), ph);
+
+    x.font = '11px ' + css('--font-mono'); x.fillStyle = muted; x.lineWidth = 1;
+    x.textAlign = 'center'; x.textBaseline = 'top';
+    for (let m = Math.ceil(t0 / 60); m * 60 <= t1 + 1e-6; m++) {
+      x.strokeStyle = grid; x.beginPath(); x.moveTo(X(m * 60), mt); x.lineTo(X(m * 60), mt + ph); x.stroke();
+      x.fillText(m + ' min', X(m * 60), mt + ph + 6);
+    }
+    x.textAlign = 'right'; x.textBaseline = 'middle';
+    for (let c = 0; c <= 40; c += 10) {
+      x.strokeStyle = c === 0 ? line : grid; x.lineWidth = c === 0 ? 1.5 : 1;
+      x.beginPath(); x.moveTo(ml, Yp(c / 100)); x.lineTo(ml + pw, Yp(c / 100)); x.stroke();
+      x.fillText(c + ' cm', ml - 6, Yp(c / 100));
+    }
+    x.strokeStyle = muted; x.setLineDash([5, 4]); x.lineWidth = 1.2;
+    [H_TOP, H_LOW].forEach(hh => { x.beginPath(); x.moveTo(ml, Yp(hh)); x.lineTo(ml + pw, Yp(hh)); x.stroke(); });
+    x.setLineDash([]);
+
+    x.save(); x.beginPath(); x.rect(ml, mt, pw, ph); x.clip();
+    x.strokeStyle = css('--water'); x.lineWidth = 2.6; x.lineJoin = 'round';
+    x.beginPath();
+    let first = true;
+    for (const p of hist) { if (p.t < t0 - 5) continue; first ? x.moveTo(X(p.t), Yp(p.h)) : x.lineTo(X(p.t), Yp(p.h)); first = false; }
+    x.stroke();
+    x.restore();
+    x.fillStyle = css('--water'); x.beginPath(); x.arc(X(t), Yp(h), 4.5, 0, 2 * Math.PI); x.fill();
+  }
+
+  function draw() { drawScene(); drawPlot(); }
+
+  // ---------- Schleife ----------
+  let last = null, tabT = 0;
+  function frame(ts) {
+    if (!running) { last = null; return; }
+    if (last === null) last = ts;
+    const real = Math.min((ts - last) / 1000, 0.05);
+    last = ts;
+    let sim = real * speed;
+    while (sim > 1e-9) {
+      const d = Math.min(0.05, sim);
+      const wasActive = active;
+      step(d);
+      if (active !== wasActive) hist.push({ t, h, active });
+      sim -= d;
+    }
+    const lp = hist[hist.length - 1];
+    if (t - lp.t > 0.5) hist.push({ t, h, active });
+    while (hist.length > 2 && hist[1].t < t - WINDOW - 30) hist.shift();
+    tabT += real;
+    if (tabT > 0.15) { updateTable(); tabT = 0; }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  function setRunning(on) {
+    running = on;
+    $('play').textContent = on ? 'Pause' : (t > 0 ? 'Weiter' : 'Start');
+    if (on) requestAnimationFrame(frame);
+  }
+  $('play').addEventListener('click', () => setRunning(!running));
+  $('reset').addEventListener('click', () => { setRunning(false); reset(); $('play').textContent = 'Start'; });
+  $('speed').addEventListener('change', e => { speed = +e.target.value; });
+  ['qin', 'qout'].forEach(id => $(id).addEventListener('input', () => { readParams(); ev.fill = ev.drain = null; updateTable(); draw(); }));
+  $('torr').addEventListener('change', () => { readParams(); ev.fill = ev.drain = null; updateTable(); draw(); });
+  window.addEventListener('resize', draw);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', draw);
+  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  if (document.fonts) document.fonts.ready.then(draw);
+
+  reset();
+  if (!reduceMotion) setRunning(true);
+})();
+</script>
+
+</html>

@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+<title>Hemmungspendel nach Galilei</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Versuchsaufbau links wie an der Tafel, Regler und Messwerte rechts, darunter das x(t)-Diagramm über die volle Breite */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --ink: #18222e;
+  --muted: #5a6776;
+  --line: #d3dae2;
+  --grid: #e3e8ee;
+  --accent: #1f5fa8;      /* Pendel, eigene Messkurve */
+  --pin: #b0731c;         /* Hemmstift, rechte Halbschwingung */
+  --pin-tint: rgba(176,115,28,.12);
+  --ghost: #9aa6b4;       /* Vergleichspendel ohne Stift */
+  --height: #2f8a5b;      /* Höhenlinie */
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --panel: #19212a; --ink: #e4e9ef; --muted: #96a3b1; --line: #2c3743; --grid: #222b35;
+    --accent: #6aa8ec; --pin: #e0a453; --pin-tint: rgba(224,164,83,.13); --ghost: #66727f; --height: #5cc48d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --panel: #19212a; --ink: #e4e9ef; --muted: #96a3b1; --line: #2c3743; --grid: #222b35;
+  --accent: #6aa8ec; --pin: #e0a453; --pin-tint: rgba(224,164,83,.13); --ghost: #66727f; --height: #5cc48d;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; padding: 0 16px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 24px 40px; display: flex; flex-direction: column; gap: 18px; }
+header { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(26px, 4vw, 36px); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.lead { margin: 0; color: var(--muted); max-width: 68ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 820px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.stage { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.stage canvas { display: block; width: 100%; height: 520px; }
+@media (max-width: 520px) { .stage canvas { height: 360px; } }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); align-items: center; }
+button, select { font: 500 14px var(--font-body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 7px 13px; cursor: pointer; }
+button:hover, select:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); min-width: 92px; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.toolbar .spacer { flex: 1; }
+.toolbar label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+h2 { font-family: var(--font-display); font-size: 13px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+.ctrl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: baseline; margin-bottom: 14px; }
+.ctrl:last-child { margin-bottom: 0; }
+.ctrl label { font-weight: 500; }
+.ctrl output { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+.ctrl input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+.ctrl .hint { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }
+.checks { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.checks label { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 6px 4px; border-bottom: 1px solid var(--line); font-size: 14px; }
+th:first-child, td:first-child { text-align: left; }
+thead th { font-weight: 600; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+td.num { font-family: var(--font-mono); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+.graph-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin-bottom: 10px; }
+.graph-head h2 { margin: 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.tabs button { padding: 5px 11px; font-size: 13px; }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.graph canvas { display: block; width: 100%; height: 240px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 22px; height: 0; border-top: 2.5px solid; vertical-align: middle; margin-right: 6px; }
+.explain { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+.explain h3 { font-family: var(--font-display); font-size: 17px; margin: 0 0 6px; }
+.explain p { margin: 0 0 8px; max-width: 65ch; }
+.formula { font-family: var(--font-mono); font-size: 14px; background: var(--bg); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: nowrap; }
+.src { font-size: 12.5px; color: var(--muted); }
+.src a { color: var(--accent); }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Q1 · Mechanische Schwingungen</span>
+    <h1>Hemmungspendel nach Galilei</h1>
+    <p class="lead">Unterhalb des Aufhängepunkts sitzt ein Stift. Schwingt das Pendel nach rechts, bleibt der Faden daran hängen und die Pendellänge verkürzt sich. Schwingt das Pendel trotzdem harmonisch?</p>
+  </header>
+
+  <div class="grid">
+    <section class="card stage" aria-label="Versuchsaufbau">
+      <canvas id="scene" aria-label="Animation des Hemmungspendels"></canvas>
+      <div class="toolbar">
+        <button id="play" class="primary">Start</button>
+        <button id="reset">Zurücksetzen</button>
+        <span class="spacer"></span>
+        <label for="speed">Tempo
+          <select id="speed">
+            <option value="1">1×</option>
+            <option value="0.5">0,5×</option>
+            <option value="0.25">0,25×</option>
+            <option value="0.1">0,1×</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <div class="side">
+      <section class="card">
+        <h2>Aufbau</h2>
+        <div class="ctrl">
+          <label for="len">Fadenlänge L</label><output id="lenOut"></output>
+          <input type="range" id="len" min="0.3" max="1.5" step="0.01" value="1.00">
+        </div>
+        <div class="ctrl">
+          <label for="pin">Stift unter Aufhängung d</label><output id="pinOut"></output>
+          <input type="range" id="pin" min="0" max="0.9" step="0.01" value="0.5">
+          <span class="hint" id="pinHint">als Anteil von L; d = 0 bedeutet ohne Stift</span>
+        </div>
+        <div class="ctrl">
+          <label for="amp">Startauslenkung links φ₀</label><output id="ampOut"></output>
+          <input type="range" id="amp" min="3" max="60" step="1" value="25">
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="showGhost" checked> Vergleichspendel ohne Stift zeigen</label>
+          <label><input type="checkbox" id="showHeight" checked> Höhenlinie einblenden</label>
+          <label><input type="checkbox" id="showTrail" checked> Bahnspur zeichnen</label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Messwerte</h2>
+        <table>
+          <thead><tr><th></th><th>links</th><th>rechts</th></tr></thead>
+          <tbody>
+            <tr><td>Wirksame Länge</td><td class="num" id="mLenL">–</td><td class="num" id="mLenR">–</td></tr>
+            <tr><td>Max. Winkel</td><td class="num" id="mAngL">–</td><td class="num" id="mAngR">–</td></tr>
+            <tr><td>Max. Auslenkung x</td><td class="num" id="mXL">–</td><td class="num" id="mXR">–</td></tr>
+            <tr><td>Steighöhe h</td><td class="num" id="mHL">–</td><td class="num" id="mHR">–</td></tr>
+            <tr><td>Halbschwingung</td><td class="num" id="mTL">–</td><td class="num" id="mTR">–</td></tr>
+          </tbody>
+        </table>
+        <table style="margin-top:10px">
+          <tbody>
+            <tr><td>Periode gemessen</td><td class="num" id="mT">–</td></tr>
+            <tr><td>Periode ohne Stift</td><td class="num" id="mT0">–</td></tr>
+          </tbody>
+        </table>
+        <p class="note">Halbschwingungen werden gemessen, sobald das Pendel einmal vollständig hin und her geschwungen ist. g = 9,81 m/s², ohne Reibung.</p>
+      </section>
+    </div>
+  </div>
+
+  <section class="card graph" aria-label="Diagramme">
+    <div class="graph-head">
+      <h2 id="plotTitle">Auslenkung x der Kugel über der Zeit t</h2>
+      <div class="tabs" role="group" aria-label="Diagramm wählen">
+        <button data-mode="x" aria-pressed="true">x(t)</button>
+        <button data-mode="v" aria-pressed="false">v(t)</button>
+        <button data-mode="E" aria-pressed="false">Energie</button>
+        <button data-mode="T" aria-pressed="false">T(d)</button>
+      </div>
+    </div>
+    <canvas id="plot" aria-label="Diagramm"></canvas>
+    <div class="legend" id="legend"></div>
+    <p class="note" id="plotNote" hidden>Kurven nach der Kleinwinkelnäherung. Bei großen Startwinkeln liegt der gemessene Punkt etwas darüber.</p>
+  </section>
+
+  <section class="card">
+    <h2>Auswertung</h2>
+    <div class="explain">
+      <div>
+        <h3>Gleiche Höhe auf beiden Seiten</h3>
+        <p>Der Stift verrichtet keine Arbeit an der Kugel, die mechanische Energie bleibt also erhalten. Die Kugel steigt rechts genauso hoch wie links. Weil der Radius rechts kleiner ist, wird dabei der Winkel größer, die waagrechte Auslenkung aber kleiner.</p>
+        <div class="formula">L(1 − cos φ<sub>L</sub>) = (L − d)(1 − cos φ<sub>R</sub>)</div>
+      </div>
+      <div>
+        <h3>Zwei verschiedene Halbschwingungen</h3>
+        <p>Links schwingt ein Pendel der Länge L, rechts eines der Länge L − d. Für kleine Winkel dauert jede Hälfte eine halbe Periode des jeweiligen Fadenpendels:</p>
+        <div class="formula">T = π·√(L/g) + π·√((L − d)/g)</div>
+      </div>
+      <div>
+        <h3>Ist die Schwingung harmonisch?</h3>
+        <p>Nein. Eine harmonische Schwingung hat ein sinusförmiges x(t)-Diagramm: gleich große Ausschläge nach beiden Seiten und gleich lange Halbschwingungen. Beim Hemmungspendel ist beides verletzt, wie das Diagramm im Vergleich zur gestrichelten Sinuskurve zeigt. Periodisch ist die Bewegung trotzdem.</p>
+      </div>
+    </div>
+    <p class="src">Grundlage: Aufgabe „Schwingt das Galilei-Pendel harmonisch?“ auf <a href="https://www.leifiphysik.de/mechanik/mechanische-schwingungen/aufgabe/schwingt-das-galilei-pendel-harmonisch" target="_blank" rel="noopener">LEIFIphysik</a>.</p>
+  </section>
+</div>
+
+<script>
+(() => {
+  const g = 9.81;
+  const $ = id => document.getElementById(id);
+  const fmt = (v, d = 2) => v.toFixed(d).replace('.', ',');
+  const deg = r => r * 180 / Math.PI;
+  const rad = a => a * Math.PI / 180;
+
+  const scene = $('scene'), sctx = scene.getContext('2d');
+  const plot = $('plot'), pctx = plot.getContext('2d');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let P = {};            // Parameter
+  let S, C;              // Zustand Hemmungspendel, Vergleichspendel
+  let t = 0, running = false, speed = 1;
+  let hist = [];         // {t, x, xc, onPin}
+  let trail = [];
+  let meas;
+  const WINDOW = 8;      // s im Diagramm
+
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function readParams() {
+    const L = +$('len').value;
+    const phi0 = rad(+$('amp').value);
+    const h = L * (1 - Math.cos(phi0));
+    // Faden darf rechts höchstens bis zur Waagrechten des Stifts steigen, sonst würde er schlaff
+    let frac = +$('pin').value;
+    const maxFrac = Math.max(0, 1 - (h / 0.98) / L);
+    let clamped = false;
+    if (frac > maxFrac) { frac = Math.floor(maxFrac * 100) / 100; clamped = true; }
+    P = { L, d: frac * L, frac, phi0, h, clamped };
+    $('lenOut').textContent = fmt(L) + ' m';
+    $('pinOut').textContent = fmt(P.d) + ' m (' + Math.round(frac * 100) + ' %)';
+    $('ampOut').textContent = Math.round(deg(phi0)) + '°';
+    $('pinHint').textContent = clamped
+      ? 'Begrenzt: Bei dieser Startauslenkung würde die Kugel rechts über den Stift steigen und der Faden schlaff werden.'
+      : 'als Anteil von L; d = 0 bedeutet ohne Stift';
+  }
+
+  function reset() {
+    readParams();
+    t = 0;
+    S = { phase: 'L', th: -P.phi0, om: 0 };
+    C = { th: -P.phi0, om: 0 };
+    hist = []; trail = [];
+    meas = { angL: P.phi0, angR: null, xL: P.L * Math.sin(P.phi0), xR: null, hL: P.h, hR: null,
+             tL: null, tR: null, lastCross: null, lastDir: 0, c0: [] };
+    const p = bobPos(S);
+    hist.push(sample());
+    computeScale();
+    updateTable();
+    draw();
+  }
+
+  function sample() {
+    const b = bobPos(S), r = radius(S), v = r * S.om;
+    const ek = 0.5 * MASS * v * v, ep = MASS * g * (P.L - b.y);
+    return { t, x: b.x, xc: P.L * Math.sin(C.th), v, vc: P.L * C.om, ek, ep, eg: ek + ep, onPin: S.phase === 'R' };
+  }
+  function radius(s) { return s.phase === 'R' ? P.L - P.d : P.L; }
+  function bobPos(s) {
+    if (s.phase === 'R') { const r = P.L - P.d; return { x: r * Math.sin(s.th), y: P.d + r * Math.cos(s.th) }; }
+    return { x: P.L * Math.sin(s.th), y: P.L * Math.cos(s.th) };
+  }
+
+  function rk4(th, om, r, dt) {
+    const f = a => -(g / r) * Math.sin(a);
+    const k1t = om, k1o = f(th);
+    const k2t = om + .5 * dt * k1o, k2o = f(th + .5 * dt * k1t);
+    const k3t = om + .5 * dt * k2o, k3o = f(th + .5 * dt * k2t);
+    const k4t = om + dt * k3o, k4o = f(th + dt * k3t);
+    return [th + dt / 6 * (k1t + 2 * k2t + 2 * k3t + k4t), om + dt / 6 * (k1o + 2 * k2o + 2 * k3o + k4o)];
+  }
+
+  function step(dt) {
+    const hasPin = P.d > 1e-6;
+    const thPrev = S.th, omPrev = S.om;
+    [S.th, S.om] = rk4(S.th, S.om, radius(S), dt);
+    const tNew = t + dt;
+
+    // Nulldurchgang: Faden legt sich an den Stift oder löst sich
+    if (thPrev < 0 && S.th >= 0) {
+      const tc = t + dt * (-thPrev) / (S.th - thPrev);
+      if (hasPin && S.phase === 'L') { const k = P.L / (P.L - P.d); S.phase = 'R'; S.th *= k; S.om *= k; }
+      crossing(tc, +1);
+    } else if (thPrev > 0 && S.th <= 0) {
+      const tc = t + dt * thPrev / (thPrev - S.th);
+      if (S.phase === 'R') { const k = (P.L - P.d) / P.L; S.phase = 'L'; S.th *= k; S.om *= k; }
+      crossing(tc, -1);
+    }
+    // Umkehrpunkt
+    if (omPrev !== 0 && Math.sign(omPrev) !== Math.sign(S.om)) {
+      const r = radius(S), p = bobPos(S);
+      const h = P.L - p.y;
+      if (S.th > 0) { meas.angR = Math.abs(S.th); meas.xR = Math.abs(p.x); meas.hR = h; }
+      else { meas.angL = Math.abs(S.th); meas.xL = Math.abs(p.x); meas.hL = h; }
+    }
+    // Vergleichspendel
+    const cPrev = C.th;
+    [C.th, C.om] = rk4(C.th, C.om, P.L, dt);
+    if (cPrev < 0 && C.th >= 0) meas.c0.push(t + dt * (-cPrev) / (C.th - cPrev));
+    t = tNew;
+  }
+
+  function crossing(tc, dir) {
+    if (meas.lastCross !== null && meas.lastDir !== dir) {
+      if (dir === +1) meas.tL = tc - meas.lastCross;   // war links, jetzt nach rechts
+      else meas.tR = tc - meas.lastCross;
+    }
+    meas.lastCross = tc; meas.lastDir = dir;
+  }
+
+  function updateTable() {
+    const L = P.L, r = P.L - P.d;
+    $('mLenL').textContent = fmt(L) + ' m';
+    $('mLenR').textContent = fmt(r) + ' m';
+    $('mAngL').textContent = meas.angL != null ? fmt(deg(meas.angL), 1) + '°' : '–';
+    $('mAngR').textContent = meas.angR != null ? fmt(deg(meas.angR), 1) + '°' : '–';
+    $('mXL').textContent = meas.xL != null ? fmt(meas.xL * 100, 1) + ' cm' : '–';
+    $('mXR').textContent = meas.xR != null ? fmt(meas.xR * 100, 1) + ' cm' : '–';
+    $('mHL').textContent = meas.hL != null ? fmt(meas.hL * 100, 1) + ' cm' : '–';
+    $('mHR').textContent = meas.hR != null ? fmt(meas.hR * 100, 1) + ' cm' : '–';
+    $('mTL').textContent = meas.tL != null ? fmt(meas.tL, 3) + ' s' : '–';
+    $('mTR').textContent = meas.tR != null ? fmt(meas.tR, 3) + ' s' : '–';
+    $('mT').textContent = (meas.tL != null && meas.tR != null) ? fmt(meas.tL + meas.tR, 3) + ' s' : '–';
+    const c = meas.c0;
+    $('mT0').textContent = c.length >= 2 ? fmt(c[c.length - 1] - c[c.length - 2], 3) + ' s' : fmt(2 * Math.PI * Math.sqrt(P.L / g), 3) + ' s (Formel)';
+  }
+
+  // ---------- Zeichnen ----------
+  let scale = 200, ox = 0, oy = 0;
+  function fitCanvas(cv, ctx) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = cv.clientWidth, h = cv.clientHeight;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return [w, h];
+  }
+  function computeScale() {
+    const [w, h] = fitCanvas(scene, sctx);
+    const halfW = Math.max(P.L * Math.sin(Math.max(P.phi0, rad(20))), 0.25 * P.L) + 0.08;
+    scale = Math.min((h - 70) / P.L, (w / 2 - 24) / halfW);
+    ox = w / 2; oy = 40;
+  }
+
+  function niceStep(raw) {
+    const p = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / p;
+    return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * p;
+  }
+
+  function drawScene() {
+    const [w, h] = fitCanvas(scene, sctx);
+    const c = sctx;
+    const ink = css('--ink'), muted = css('--muted'), acc = css('--accent'), pin = css('--pin'),
+          ghost = css('--ghost'), hcol = css('--height'), grid = css('--grid'), panel = css('--panel');
+    c.clearRect(0, 0, w, h);
+    const X = x => ox + x * scale, Y = y => oy + y * scale;
+
+    // Raster 10 cm
+    c.strokeStyle = grid; c.lineWidth = 1;
+    const gs = 0.1 * scale;
+    if (gs > 8) {
+      c.beginPath();
+      for (let x = ox % gs; x < w; x += gs) { c.moveTo(x, 0); c.lineTo(x, h); }
+      for (let y = oy % gs; y < h; y += gs) { c.moveTo(0, y); c.lineTo(w, y); }
+      c.stroke();
+    }
+
+    // Decke
+    c.fillStyle = muted;
+    c.fillRect(ox - 70, oy - 12, 140, 4);
+    c.strokeStyle = muted; c.lineWidth = 1;
+    c.beginPath();
+    for (let x = ox - 66; x < ox + 70; x += 10) { c.moveTo(x, oy - 12); c.lineTo(x + 8, oy - 22); }
+    c.stroke();
+
+    // Höhenlinie
+    if ($('showHeight').checked) {
+      const yh = Y(P.L - P.h);
+      c.setLineDash([6, 5]); c.strokeStyle = hcol; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(16, yh); c.lineTo(w - 16, yh); c.stroke();
+      c.beginPath(); c.moveTo(16, Y(P.L)); c.lineTo(w - 16, Y(P.L)); c.globalAlpha = .45; c.stroke(); c.globalAlpha = 1;
+      c.setLineDash([]);
+      c.fillStyle = hcol; c.font = '500 12px ' + css('--font-body');
+      c.textAlign = 'right'; c.textBaseline = 'bottom';
+      c.fillText('Starthöhe, h = ' + fmt(P.h * 100, 1) + ' cm', w - 18, yh - 3);
+    }
+
+    // Vergleichspendel
+    if ($('showGhost').checked && P.d > 1e-6) {
+      const gx = X(P.L * Math.sin(C.th)), gy = Y(P.L * Math.cos(C.th));
+      c.setLineDash([4, 4]); c.strokeStyle = ghost; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(ox, oy); c.lineTo(gx, gy); c.stroke(); c.setLineDash([]);
+      c.beginPath(); c.arc(gx, gy, 10, 0, 2 * Math.PI); c.stroke();
+    }
+
+    // Spur
+    if ($('showTrail').checked && trail.length > 1) {
+      c.lineWidth = 2;
+      for (let i = 1; i < trail.length; i++) {
+        c.strokeStyle = acc; c.globalAlpha = 0.05 + 0.4 * i / trail.length;
+        c.beginPath(); c.moveTo(X(trail[i - 1].x), Y(trail[i - 1].y)); c.lineTo(X(trail[i].x), Y(trail[i].y)); c.stroke();
+      }
+      c.globalAlpha = 1;
+    }
+
+    // Stift mit Halter
+    const hasPin = P.d > 1e-6;
+    if (hasPin) {
+      const px = ox, py = Y(P.d);
+      c.strokeStyle = pin; c.lineWidth = 3;
+      c.beginPath(); c.moveTo(px - 4, py); c.lineTo(px - 38, py); c.stroke();
+      c.fillStyle = pin; c.fillRect(px - 42, py - 7, 5, 14);
+    }
+
+    // Faden
+    const b = bobPos(S);
+    c.strokeStyle = ink; c.lineWidth = 1.6;
+    c.beginPath(); c.moveTo(ox, oy);
+    if (S.phase === 'R') c.lineTo(ox, Y(P.d));
+    c.lineTo(X(b.x), Y(b.y)); c.stroke();
+
+    if (hasPin) {
+      c.fillStyle = S.phase === 'R' ? pin : panel; c.strokeStyle = pin; c.lineWidth = 2;
+      c.beginPath(); c.arc(ox, Y(P.d), 4.5, 0, 2 * Math.PI); c.fill(); c.stroke();
+      c.fillStyle = pin; c.font = '600 12px ' + css('--font-body'); c.textAlign = 'right'; c.textBaseline = 'bottom';
+      c.fillText('Stift', ox - 46, Y(P.d) - 2);
+    }
+
+    // Aufhängepunkt
+    c.fillStyle = ink; c.beginPath(); c.arc(ox, oy, 3.5, 0, 2 * Math.PI); c.fill();
+
+    // Kugel
+    c.fillStyle = acc;
+    c.beginPath(); c.arc(X(b.x), Y(b.y), 11, 0, 2 * Math.PI); c.fill();
+    c.fillStyle = panel; c.globalAlpha = .35;
+    c.beginPath(); c.arc(X(b.x) - 3.5, Y(b.y) - 3.5, 3.5, 0, 2 * Math.PI); c.fill(); c.globalAlpha = 1;
+
+    // Maßstab
+    const sb = niceStep(80 / scale);
+    c.strokeStyle = muted; c.fillStyle = muted; c.lineWidth = 1.5;
+    const sx = 16, sy = 34;
+    c.beginPath(); c.moveTo(sx, sy - 5); c.lineTo(sx, sy); c.lineTo(sx + sb * scale, sy); c.lineTo(sx + sb * scale, sy - 5); c.stroke();
+    c.font = '12px ' + css('--font-mono'); c.textAlign = 'left'; c.textBaseline = 'bottom';
+    c.fillText(sb >= 1 ? fmt(sb, 0) + ' m' : Math.round(sb * 100) + ' cm', sx, sy - 6);
+
+    c.textAlign = 'right';
+    c.fillText('t = ' + fmt(t, 2) + ' s', w - 16, h - 12);
+  }
+
+  const MASS = 0.1; // kg, für das Energiediagramm
+  const MODES = {
+    x: { title: 'Auslenkung x der Kugel über der Zeit t', legend: [['accent', 'solid', 'Hemmungspendel'], ['ghost', 'dashed', 'gleiches Pendel ohne Stift (harmonisch)', 'g'], ['pin', 'tint', 'Faden liegt am Stift an']] },
+    v: { title: 'Bahngeschwindigkeit v der Kugel über der Zeit t', legend: [['accent', 'solid', 'Hemmungspendel'], ['ghost', 'dashed', 'gleiches Pendel ohne Stift (harmonisch)', 'g'], ['pin', 'tint', 'Faden liegt am Stift an']] },
+    E: { title: 'Energien über der Zeit t (Kugelmasse m = 100 g)', legend: [['height', 'solid', 'Lageenergie E<sub>pot</sub>'], ['accent', 'solid', 'Bewegungsenergie E<sub>kin</sub>'], ['ink', 'solid', 'Gesamtenergie E<sub>ges</sub>'], ['pin', 'tint', 'Faden liegt am Stift an']] },
+    T: { title: 'Periodendauer T in Abhängigkeit von der Stiftposition d', legend: [['accent', 'solid', 'Periode T'], ['ghost', 'dashed', 'linke Halbschwingung'], ['pin', 'solid', 'rechte Halbschwingung'], ['ink', 'dot', 'aktuelle Einstellung (gemessen)']] }
+  };
+  let mode = 'x';
+
+  function renderLegend() {
+    const m = MODES[mode];
+    $('plotTitle').textContent = m.title;
+    $('legend').innerHTML = m.legend.map(([col, sty, txt, flag]) => {
+      if (flag === 'g' && !$('showGhost').checked) return '';
+      const mark = sty === 'tint' ? '<span class="sw" style="background:var(--pin-tint);border:1px solid var(--pin)"></span>'
+        : sty === 'dot' ? '<span class="sw" style="background:var(--' + col + ');border-radius:50%"></span>'
+        : '<i style="border-color:var(--' + col + ');border-top-style:' + sty + '"></i>';
+      return '<span>' + mark + txt + '</span>';
+    }).join('');
+    document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === mode));
+  }
+
+  function drawPlot() {
+    if (mode === 'T') return drawPeriodPlot();
+    const [w, h] = fitCanvas(plot, pctx);
+    const c = pctx;
+    const muted = css('--muted'), tint = css('--pin-tint'), grid = css('--grid'), line = css('--line');
+    c.clearRect(0, 0, w, h);
+    const ml = 64, mr = 12, mt = 10, mb = 28;
+    const pw = w - ml - mr, ph = h - mt - mb;
+    const t1 = Math.max(WINDOW, t), t0 = t1 - WINDOW;
+    const TX = tt => ml + (tt - t0) / WINDOW * pw;
+
+    // Wertebereich und Kurven je nach Diagramm
+    let lo, hi, unit, k, series;
+    const ghostOn = $('showGhost').checked && P.d > 1e-6;
+    if (mode === 'x') {
+      hi = Math.max(P.L * Math.sin(P.phi0), 0.02) * 1.12; lo = -hi; unit = 'cm'; k = 100;
+      series = [ghostOn && ['xc', '--ghost', [5, 4], 1.6], ['x', '--accent', [], 2.4]];
+    } else if (mode === 'v') {
+      hi = Math.sqrt(2 * g * P.h) * 1.12; lo = -hi; unit = 'm/s'; k = 1;
+      series = [ghostOn && ['vc', '--ghost', [5, 4], 1.6], ['v', '--accent', [], 2.4]];
+    } else {
+      hi = MASS * g * P.h * 1.15; lo = 0; unit = 'J'; k = 1;
+      series = [['ep', '--height', [], 2.2], ['ek', '--accent', [], 2.2], ['eg', '--ink', [], 1.6]];
+    }
+    const TY = v => mt + (hi - v) / (hi - lo) * ph;
+
+    // Stift-Phasen hinterlegen
+    c.fillStyle = tint;
+    let start = null;
+    for (const p of hist) {
+      if (p.t < t0) continue;
+      if (p.onPin && start === null) start = p.t;
+      if (!p.onPin && start !== null) { c.fillRect(TX(start), mt, TX(p.t) - TX(start), ph); start = null; }
+    }
+    if (start !== null) c.fillRect(TX(start), mt, TX(hist[hist.length - 1].t) - TX(start), ph);
+
+    // Raster und Achsen
+    c.strokeStyle = grid; c.lineWidth = 1;
+    c.font = '11px ' + css('--font-mono'); c.fillStyle = muted;
+    c.textAlign = 'center'; c.textBaseline = 'top';
+    for (let s = Math.ceil(t0); s <= t1 + 1e-9; s++) {
+      c.beginPath(); c.moveTo(TX(s), mt); c.lineTo(TX(s), mt + ph); c.stroke();
+      c.fillText(s + ' s', TX(s), mt + ph + 6);
+    }
+    const ys = niceStep((hi - lo) * k / 4.4) / k;
+    const dec = ys * k >= 1 ? 0 : ys * k >= 0.1 ? 1 : ys * k >= 0.01 ? 2 : 3;
+    c.textAlign = 'right'; c.textBaseline = 'middle';
+    for (let v = Math.ceil(lo / ys) * ys; v <= hi + 1e-12; v += ys) {
+      const yy = TY(v), zero = Math.abs(v) < ys * 1e-6;
+      c.strokeStyle = zero ? line : grid; c.lineWidth = zero ? 1.5 : 1;
+      c.beginPath(); c.moveTo(ml, yy); c.lineTo(ml + pw, yy); c.stroke();
+      c.fillText(fmt(zero ? 0 : v * k, dec) + ' ' + unit, ml - 6, yy);
+    }
+
+    c.save();
+    c.beginPath(); c.rect(ml, mt, pw, ph); c.clip();
+    for (const sr of series) {
+      if (!sr) continue;
+      const [key, col, dash, lw] = sr;
+      c.setLineDash(dash); c.strokeStyle = css(col); c.lineWidth = lw;
+      c.beginPath();
+      let first = true;
+      for (const p of hist) { if (p.t < t0 - 0.05) continue; const yy = TY(p[key]); first ? c.moveTo(TX(p.t), yy) : c.lineTo(TX(p.t), yy); first = false; }
+      c.stroke();
+    }
+    c.setLineDash([]);
+    c.restore();
+
+    if (mode !== 'E') {
+      c.fillStyle = muted; c.textAlign = 'left'; c.textBaseline = 'top';
+      c.fillText(mode === 'x' ? 'rechts' : 'nach rechts', ml + 6, mt + 4);
+      c.textBaseline = 'bottom';
+      c.fillText(mode === 'x' ? 'links' : 'nach links', ml + 6, mt + ph - 4);
+    }
+  }
+
+  // Kleinwinkelnäherung: T(d) = π√(L/g) + π√((L−d)/g)
+  function drawPeriodPlot() {
+    const [w, h] = fitCanvas(plot, pctx);
+    const c = pctx;
+    const muted = css('--muted'), grid = css('--grid'), line = css('--line');
+    c.clearRect(0, 0, w, h);
+    const ml = 64, mr = 28, mt = 12, mb = 30;
+    const pw = w - ml - mr, ph = h - mt - mb;
+    const L = P.L, half = r => Math.PI * Math.sqrt(r / g);
+    const T0 = 2 * half(L);
+    const hi = T0 * 1.1;
+    const DX = d => ml + d / L * pw;
+    const TY = v => mt + (1 - v / hi) * ph;
+
+    c.font = '11px ' + css('--font-mono'); c.fillStyle = muted; c.lineWidth = 1;
+    c.textAlign = 'center'; c.textBaseline = 'top';
+    for (let f = 0; f <= 1.0001; f += 0.1) {
+      c.strokeStyle = grid; c.beginPath(); c.moveTo(DX(f * L), mt); c.lineTo(DX(f * L), mt + ph); c.stroke();
+      if (Math.round(f * 10) % 2 === 0) c.fillText(fmt(f * L, 2) + ' m', DX(f * L), mt + ph + 6);
+    }
+    const ys = niceStep(hi / 4.4);
+    c.textAlign = 'right'; c.textBaseline = 'middle';
+    for (let v = 0; v <= hi + 1e-9; v += ys) {
+      c.strokeStyle = v === 0 ? line : grid; c.lineWidth = v === 0 ? 1.5 : 1;
+      c.beginPath(); c.moveTo(ml, TY(v)); c.lineTo(ml + pw, TY(v)); c.stroke();
+      c.fillText(fmt(v, ys < 0.1 ? 2 : 1) + ' s', ml - 6, TY(v));
+    }
+
+    const curve = (fn, col, dash, lw) => {
+      c.strokeStyle = css(col); c.setLineDash(dash); c.lineWidth = lw; c.beginPath();
+      for (let i = 0; i <= 200; i++) { const d = i / 200 * L; const y = TY(fn(d)); i ? c.lineTo(DX(d), y) : c.moveTo(DX(d), y); }
+      c.stroke(); c.setLineDash([]);
+    };
+    curve(() => half(L), '--ghost', [5, 4], 1.6);
+    curve(d => half(L - d), '--pin', [], 2);
+    curve(d => half(L) + half(L - d), '--accent', [], 2.6);
+
+    // aktuelle Einstellung
+    const d = P.d, Tth = half(L) + half(L - d);
+    c.strokeStyle = muted; c.setLineDash([3, 3]); c.lineWidth = 1;
+    c.beginPath(); c.moveTo(DX(d), mt); c.lineTo(DX(d), mt + ph); c.stroke(); c.setLineDash([]);
+    c.fillStyle = css('--accent'); c.beginPath(); c.arc(DX(d), TY(Tth), 4, 0, 2 * Math.PI); c.fill();
+    const Tm = (meas.tL != null && meas.tR != null) ? meas.tL + meas.tR : null;
+    if (Tm != null) { c.fillStyle = css('--ink'); c.beginPath(); c.arc(DX(d), TY(Tm), 5, 0, 2 * Math.PI); c.fill(); }
+    c.fillStyle = muted; c.textBaseline = 'bottom';
+    const label = 'd = ' + fmt(d, 2) + ' m: T ≈ ' + fmt(Tth, 2) + ' s' + (Tm != null ? ', gemessen ' + fmt(Tm, 2) + ' s' : '');
+    c.textAlign = DX(d) > ml + pw * 0.6 ? 'right' : 'left';
+    c.fillText(label, DX(d) + (c.textAlign === 'right' ? -8 : 8), mt + 16);
+    c.textAlign = 'left';
+    c.fillText('Stiftposition d unter der Aufhängung →', ml + 8, mt + ph - 4);
+  }
+
+  function draw() { drawScene(); drawPlot(); }
+
+  // ---------- Schleife ----------
+  let last = null, tableTimer = 0;
+  function frame(ts) {
+    if (!running) { last = null; return; }
+    if (last === null) last = ts;
+    let real = Math.min((ts - last) / 1000, 0.05);
+    last = ts;
+    let simT = real * speed;
+    const dt = 0.0005;
+    while (simT > 1e-12) {
+      const h = Math.min(dt, simT);
+      step(h);
+      simT -= h;
+    }
+    const b = bobPos(S);
+    hist.push(sample());
+    while (hist.length && hist[0].t < t - WINDOW - 1) hist.shift();
+    trail.push(b);
+    if (trail.length > 140) trail.shift();
+    tableTimer += real;
+    if (tableTimer > 0.12) { updateTable(); tableTimer = 0; }
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  function setRunning(on) {
+    running = on;
+    $('play').textContent = on ? 'Pause' : (t > 0 ? 'Weiter' : 'Start');
+    if (on) requestAnimationFrame(frame);
+  }
+
+  $('play').addEventListener('click', () => setRunning(!running));
+  $('reset').addEventListener('click', () => { setRunning(false); reset(); $('play').textContent = 'Start'; });
+  $('speed').addEventListener('change', e => { speed = +e.target.value; });
+  ['len', 'pin', 'amp'].forEach(id => $(id).addEventListener('input', () => {
+    const was = running; setRunning(false); reset(); if (was) setRunning(true); else $('play').textContent = 'Start';
+  }));
+  ['showGhost', 'showHeight', 'showTrail'].forEach(id => $(id).addEventListener('change', () => {
+    renderLegend(); draw();
+  }));
+  window.addEventListener('resize', () => { computeScale(); draw(); });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', draw);
+  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  if (reduceMotion) $('speed').value = '0.5', speed = 0.5;
+  document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+    mode = b.dataset.mode; $('plotNote').hidden = mode !== 'T'; renderLegend(); drawPlot();
+  }));
+  renderLegend();
+  reset();
+  if (!reduceMotion) setRunning(true);
+  if (document.fonts) document.fonts.ready.then(draw);
+})();
+</script>
+
+</html>

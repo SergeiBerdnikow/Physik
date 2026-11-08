@@ -1,0 +1,343 @@
+<title>Federkonstante</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: vier Federn am Stativ links, Massestücke und Messtabelle rechts, darunter F-s-Diagramm */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --ink: #18222e;
+  --muted: #5a6776;
+  --line: #d3dae2;
+  --grid: #e3e8ee;
+  --accent: #1f5fa8;
+  --scene: #f6f8fa;
+  --steel: #6b7480;
+  --brass: #b58a3a;
+  --cA: #1f5fa8;
+  --cB: #2f8a5b;
+  --cC: #c2412d;
+  --cX: #7a4fb5;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --panel: #19212a; --ink: #e4e9ef; --muted: #96a3b1; --line: #2c3743; --grid: #222b35;
+    --accent: #6aa8ec; --scene: #151c24; --steel: #9aa4b0; --brass: #d3a85a;
+    --cA: #6aa8ec; --cB: #5cc48d; --cC: #f07a62; --cX: #b293e6;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --panel: #19212a; --ink: #e4e9ef; --muted: #96a3b1; --line: #2c3743; --grid: #222b35;
+  --accent: #6aa8ec; --scene: #151c24; --steel: #9aa4b0; --brass: #d3a85a;
+  --cA: #6aa8ec; --cB: #5cc48d; --cC: #f07a62; --cX: #b293e6;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; margin: 0; padding: 0 16px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 24px 40px; display: flex; flex-direction: column; gap: 18px; }
+header { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(26px, 4vw, 36px); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.lead { margin: 0; color: var(--muted); max-width: 72ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.stage { padding: 0; overflow: hidden; }
+.stage canvas { display: block; width: 100%; height: 480px; }
+@media (max-width: 520px) { .stage canvas { height: 420px; } }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 12px 14px; border-top: 1px solid var(--line); align-items: center; }
+.toolbar label { font-size: 14px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+button, select { font: 500 14px var(--font-body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 7px 13px; cursor: pointer; }
+button:hover:not(:disabled), select:hover { border-color: var(--muted); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h2 { font-family: var(--font-display); font-size: 13px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+.load { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.load .count { font-family: var(--font-mono); font-size: 22px; min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; }
+.load .force { font-family: var(--font-mono); font-size: 14px; color: var(--muted); }
+.load button { font-size: 18px; width: 42px; padding: 4px 0; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { font-size: 12.5px; font-weight: 600; color: var(--muted); text-align: right; padding: 4px; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; }
+td { text-align: right; padding: 6px 4px; border-bottom: 1px solid var(--line); font-size: 14px; font-family: var(--font-mono); white-space: nowrap; }
+td:first-child { font-family: var(--font-body); font-weight: 600; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+.note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+.merk { font-size: 14.5px; }
+.merk p { margin: 0 0 8px; }
+.merk .big { font-family: var(--font-mono); font-size: 17px; background: var(--bg); border-radius: 6px; padding: 8px 12px; display: inline-block; margin-bottom: 8px; }
+.graph canvas { display: block; width: 100%; height: 360px; }
+.graph .head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.graph .head h2 { margin: 0; }
+.graph .head label { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.reveal { font-size: 13px; margin-top: 10px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Mechanische Schwingungen · Q1 Physik</span>
+    <h1>Federkonstante</h1>
+    <p class="lead">Vier Federn hängen nebeneinander und tragen immer die gleiche Last. Häng Massestücke an und vergleiche, wie weit sich jede Feder dehnt. Die Federkonstante <i>D</i> sagt, wie viel Kraft man für eine bestimmte Dehnung braucht.</p>
+  </header>
+
+  <div class="grid">
+    <div class="card stage">
+      <canvas id="scene" aria-label="Vier Federn am Stativ mit angehängten Massestücken"></canvas>
+      <div class="toolbar">
+        <label><input type="checkbox" id="showS" checked> Dehnung anzeigen</label>
+        <label><input type="checkbox" id="showRule" checked> Lineal</label>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card">
+        <h2>Belastung (je Feder)</h2>
+        <div class="load">
+          <button id="minus" aria-label="Massestück abnehmen">−</button>
+          <span class="count" id="n">0</span>
+          <button id="plus" aria-label="Massestück anhängen">+</button>
+          <span>× 50 g</span>
+          <span class="force" id="force"></span>
+        </div>
+        <p class="note">Gewichtskraft <i>F</i> = <i>m</i> · <i>g</i> mit <i>g</i> = 9,81 N/kg. Im Gleichgewicht ist die Federkraft genauso groß.</p>
+      </div>
+      <div class="card">
+        <h2>Messwerte</h2>
+        <table>
+          <thead><tr><th>Feder</th><th>F</th><th>s</th><th>D = F / s</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <p class="note">Feder X ist unbekannt. Bestimme ihre Federkonstante aus dem Diagramm.</p>
+        <div class="reveal"><button id="newX">Neue Feder X</button> <button id="showX">D von X aufdecken</button> <span id="xVal"></span></div>
+      </div>
+      <div class="card merk">
+        <h2>Merke</h2>
+        <div class="big">F = D · s</div>
+        <p>Die Dehnung <i>s</i> ist proportional zur Kraft <i>F</i> (Gesetz von Hooke). Der Faktor <i>D</i> ist die <b>Federkonstante</b>, Einheit N/m.</p>
+        <p><i>D</i> = 25 N/m heißt: Für 1 m Dehnung braucht man 25 N, für 1 cm also 0,25 N. Je größer <i>D</i>, desto härter die Feder.</p>
+        <p>Im <i>F</i>-<i>s</i>-Diagramm ist <i>D</i> die Steigung der Geraden.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card graph">
+    <div class="head">
+      <h2>F-s-Diagramm</h2>
+      <label for="tri">Steigungsdreieck für
+        <select id="tri"><option value="-1">keine</option><option value="0">Feder A</option><option value="1" selected>Feder B</option><option value="2">Feder C</option><option value="3">Feder X</option></select>
+      </label>
+    </div>
+    <canvas id="graph" aria-label="Kraft über Dehnung für alle Federn"></canvas>
+    <p class="note">Jeder Punkt wird eingetragen, sobald die Feder zur Ruhe gekommen ist. Die Geraden gehen durch den Ursprung: doppelte Kraft, doppelte Dehnung.</p>
+  </div>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const g = 9.81, mPiece = 0.05, NMAX = 6, L0 = 0.10;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const nf = (v, d) => v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+const randX = () => Math.round(12 + Math.random() * 30);
+const springs = [
+  { name: 'A', D: 10, col: '--cA', hint: 'weich' },
+  { name: 'B', D: 25, col: '--cB', hint: 'mittel' },
+  { name: 'C', D: 50, col: '--cC', hint: 'hart' },
+  { name: 'X', D: randX(), col: '--cX', hint: '?' }
+].map(s => ({ ...s, y: 0, vy: 0, pts: new Map(), settled: true }));
+let n = 0, revealX = false;
+
+const F = () => n * mPiece * g;
+function setN(k) {
+  n = Math.max(0, Math.min(NMAX, k));
+  springs.forEach(s => s.settled = false);
+  $('n').textContent = n;
+  $('force').textContent = 'F = ' + nf(F(), 2) + ' N';
+  $('minus').disabled = n === 0; $('plus').disabled = n === NMAX;
+}
+$('plus').onclick = () => setN(n + 1);
+$('minus').onclick = () => setN(n - 1);
+$('newX').onclick = () => { const s = springs[3]; s.D = randX(); s.pts.clear(); s.settled = false; revealX = false; $('xVal').textContent = ''; };
+$('showX').onclick = () => { revealX = true; $('xVal').textContent = 'D = ' + springs[3].D + ' N/m'; };
+
+function step(dt) {
+  const m = Math.max(n * mPiece, 0.03);
+  springs.forEach(s => {
+    const target = F() / s.D;
+    const h = dt / 8;
+    for (let i = 0; i < 8; i++) {
+      const a = (F() - s.D * s.y) / m - 4.5 * s.vy;
+      s.vy += a * h; s.y += s.vy * h;
+    }
+    if (!s.settled && Math.abs(s.y - target) < 2e-4 && Math.abs(s.vy) < 3e-3) {
+      s.settled = true; s.y = target; s.vy = 0;
+      s.pts.set(n, { F: F(), s: target });
+    }
+  });
+}
+
+function updateTable() {
+  const rows = springs.map(s => {
+    const known = s.settled && n > 0;
+    const d = known ? (s.name === 'X' && !revealX ? '?' : nf(F() / s.y, 1) + ' N/m') : (n === 0 ? '–' : '…');
+    return '<tr><td><span class="dot" style="background:var(' + s.col + ')"></span>' + s.name + ' <span style="font-weight:400;color:var(--muted)">(' + s.hint + ')</span></td>' +
+      '<td>' + nf(F(), 2) + ' N</td><td>' + nf(Math.max(0, s.y) * 100, 1) + ' cm</td><td>' + d + '</td></tr>';
+  }).join('');
+  $('tbody').innerHTML = rows;
+}
+
+function fit(cv) {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return [c, r.width, r.height];
+}
+
+function drawScene() {
+  const [c, W, H] = fit($('scene'));
+  c.fillStyle = css('--scene'); c.fillRect(0, 0, W, H);
+  const top = 34, rulerW = $('showRule').checked ? 46 : 8;
+  const maxLen = L0 + NMAX * mPiece * g / 10 + 0.01; // längste Feder (A, D = 10 N/m)
+  const sc = (H - top - 70) / maxLen;                   // Pixel pro Meter
+  const ink = css('--ink'), muted = css('--muted'), steel = css('--steel');
+  // Stativstange
+  c.fillStyle = steel; c.fillRect(10, top - 12, W - 20, 8);
+  const slot = (W - rulerW - 20) / 4;
+  const restY = top + L0 * sc;
+
+  // Lineal mit Nullmarke auf Höhe der ungedehnten Federenden
+  if ($('showRule').checked) {
+    const rx = W - rulerW + 4;
+    c.fillStyle = css('--panel'); c.strokeStyle = css('--line'); c.lineWidth = 1;
+    c.fillRect(rx, restY - 8, 32, H - restY - 4); c.strokeRect(rx, restY - 8, 32, H - restY - 4);
+    c.strokeStyle = ink; c.fillStyle = muted; c.font = '500 10px ' + css('--font-mono'); c.textAlign = 'right'; c.textBaseline = 'middle';
+    for (let cm = 0; restY + cm / 100 * sc < H - 6; cm++) {
+      const y = restY + cm / 100 * sc, len = cm % 5 === 0 ? 10 : 5;
+      c.beginPath(); c.moveTo(rx, y); c.lineTo(rx + len, y); c.lineWidth = cm % 5 === 0 ? 1.2 : .6; c.stroke();
+      if (cm % 5 === 0) c.fillText(String(cm), rx + 30, y);
+    }
+    c.textAlign = 'center'; c.fillText('cm', rx + 16, restY - 16);
+  }
+  c.setLineDash([4, 4]); c.strokeStyle = muted; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(14, restY); c.lineTo(W - rulerW, restY); c.stroke(); c.setLineDash([]);
+
+  springs.forEach((s, i) => {
+    const cx = 10 + slot * (i + 0.5), col = css(s.col);
+    const bottom = restY + Math.max(-0.02, s.y) * sc;
+    // Haken oben
+    c.strokeStyle = steel; c.lineWidth = 2; c.beginPath(); c.moveTo(cx, top - 4); c.lineTo(cx, top + 4); c.stroke();
+    // Feder: Windungen gleich, Drahtstärke zeigt D
+    const turns = 12, lead = 8, len = bottom - top - 2 * lead, amp = Math.min(11, slot * 0.18);
+    c.strokeStyle = col; c.lineWidth = 0.8 + s.D / 14; c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(cx, top + 4); c.lineTo(cx, top + lead);
+    for (let k = 0; k < turns * 2; k++) c.lineTo(cx + (k % 2 ? amp : -amp), top + lead + len * (k + 0.5) / (turns * 2));
+    c.lineTo(cx, bottom - lead + 2); c.lineTo(cx, bottom); c.stroke();
+    // Haken + Massestücke
+    c.strokeStyle = ink; c.lineWidth = 1.5; c.beginPath(); c.moveTo(cx, bottom); c.lineTo(cx, bottom + 6); c.stroke();
+    const pw = Math.min(34, slot * 0.6), ph = 7;
+    for (let k = 0; k < n; k++) {
+      const y = bottom + 6 + k * (ph + 1);
+      c.fillStyle = css('--brass'); c.strokeStyle = ink; c.lineWidth = .8;
+      c.beginPath(); c.roundRect(cx - pw / 2, y, pw, ph, 2); c.fill(); c.stroke();
+    }
+    // Beschriftung
+    c.fillStyle = col; c.font = '700 14px ' + css('--font-body'); c.textAlign = 'center'; c.textBaseline = 'bottom';
+    c.fillText(s.name, cx, top - 14);
+    // Dehnung als Klammer
+    if ($('showS').checked && s.y > 0.004) {
+      const bx = cx + amp + 8;
+      c.strokeStyle = col; c.fillStyle = col; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(bx - 4, restY); c.lineTo(bx, restY); c.lineTo(bx, bottom); c.lineTo(bx - 4, bottom); c.stroke();
+      c.font = '500 11.5px ' + css('--font-mono'); c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.save(); c.translate(bx + 5, (restY + bottom) / 2);
+      if (slot < 130) { c.rotate(Math.PI / 2); c.textAlign = 'center'; c.textBaseline = 'bottom'; c.fillText(nf(s.y * 100, 1) + ' cm', 0, 0); }
+      else c.fillText('s = ' + nf(s.y * 100, 1) + ' cm', 0, 0);
+      c.restore();
+    }
+  });
+  c.fillStyle = muted; c.font = '500 11px ' + css('--font-mono'); c.textAlign = 'left'; c.textBaseline = 'bottom';
+  c.fillText('ungedehnt', 14, restY - 3);
+}
+
+function drawGraph() {
+  const [c, W, H] = fit($('graph'));
+  c.clearRect(0, 0, W, H);
+  const padL = 52, padR = 16, padT = 12, padB = 40;
+  const sMax = 0.30, FMax = 3.2;
+  const X = s => padL + s / sMax * (W - padL - padR), Y = f => H - padB - f / FMax * (H - padT - padB);
+  const muted = css('--muted'), grid = css('--grid'), line = css('--line');
+  c.font = '500 11.5px ' + css('--font-mono');
+  c.strokeStyle = grid; c.lineWidth = 1; c.fillStyle = muted;
+  for (let cm = 0; cm <= 30; cm += 2) {
+    c.beginPath(); c.moveTo(X(cm / 100), padT); c.lineTo(X(cm / 100), H - padB); c.stroke();
+    if (cm % 5 === 0 || W > 700) { c.textAlign = 'center'; c.textBaseline = 'top'; if (cm % (W > 700 ? 2 : 5) === 0) c.fillText(cm, X(cm / 100), H - padB + 6); }
+  }
+  for (let f = 0; f <= 3.0001; f += 0.5) {
+    c.beginPath(); c.moveTo(padL, Y(f)); c.lineTo(W - padR, Y(f)); c.stroke();
+    c.textAlign = 'right'; c.textBaseline = 'middle'; c.fillText(nf(f, 1), padL - 6, Y(f));
+  }
+  c.strokeStyle = line; c.lineWidth = 1.5;
+  c.beginPath(); c.moveTo(padL, padT); c.lineTo(padL, H - padB); c.lineTo(W - padR, H - padB); c.stroke();
+  c.fillStyle = css('--ink'); c.font = '600 12px ' + css('--font-body');
+  c.textAlign = 'right'; c.textBaseline = 'bottom'; c.fillText('s in cm', W - padR, H - 4);
+  c.textAlign = 'left'; c.textBaseline = 'top'; c.fillText('F in N', padL + 6, padT);
+
+  c.save(); c.beginPath(); c.rect(padL, padT, W - padL - padR, H - padT - padB); c.clip();
+  springs.forEach(s => {
+    const col = css(s.col), pts = [...s.pts.values()].filter(p => p.F > 0);
+    if (pts.length >= 2) {
+      const sEnd = Math.min(sMax, FMax / s.D);
+      c.strokeStyle = col; c.lineWidth = 2; c.globalAlpha = .75;
+      c.beginPath(); c.moveTo(X(0), Y(0)); c.lineTo(X(sEnd), Y(sEnd * s.D)); c.stroke(); c.globalAlpha = 1;
+      const lx = Math.min(2.9 / s.D, sMax * 0.95);
+      c.fillStyle = col; c.font = '700 13px ' + css('--font-body'); c.textAlign = 'right'; c.textBaseline = 'bottom';
+      c.fillText(s.name, X(lx) - 6, Y(lx * s.D) - 2);
+    }
+    c.fillStyle = col;
+    pts.forEach(p => { c.beginPath(); c.arc(X(p.s), Y(p.F), 4.5, 0, 7); c.fill(); });
+  });
+  // Steigungsdreieck
+  const ti = parseInt($('tri').value, 10);
+  if (ti >= 0) {
+    const s = springs[ti], pts = [...s.pts.values()].filter(p => p.F > 0);
+    if (pts.length >= 2) {
+      const s1 = 0.02, ds = Math.max(0.01, Math.floor(Math.min(0.10, (FMax / s.D - s1) * 0.8) * 100) / 100), s2 = s1 + ds;
+      const col = css(s.col), F1 = s.D * s1, F2 = s.D * s2;
+      c.strokeStyle = col; c.lineWidth = 1.5; c.setLineDash([5, 4]);
+      c.beginPath(); c.moveTo(X(s1), Y(F1)); c.lineTo(X(s2), Y(F1)); c.lineTo(X(s2), Y(F2)); c.stroke(); c.setLineDash([]);
+      c.fillStyle = col; c.font = '500 12px ' + css('--font-mono');
+      c.textAlign = 'center'; c.textBaseline = 'top'; c.fillText('Δs = ' + nf(ds * 100, 0) + ' cm', (X(s1) + X(s2)) / 2, Y(F1) + 4);
+      c.textAlign = 'left'; c.textBaseline = 'middle';
+      const hidden = s.name === 'X' && !revealX;
+      c.fillText('ΔF = ' + (hidden ? '?' : nf(F2 - F1, 2) + ' N'), X(s2) + 6, (Y(F1) + Y(F2)) / 2);
+      if (!hidden) c.fillText('D = ΔF/Δs = ' + nf(s.D, 0) + ' N/m', X(s2) + 6, (Y(F1) + Y(F2)) / 2 + 16);
+    }
+  }
+  c.restore();
+}
+
+let last = null, acc = 0;
+function frame(ts) {
+  if (last === null) last = ts;
+  const dt = Math.min(0.04, (ts - last) / 1000); last = ts;
+  step(dt);
+  acc += dt; if (acc > 0.1) { updateTable(); acc = 0; }
+  drawScene(); drawGraph();
+  requestAnimationFrame(frame);
+}
+// Startzustand: zwei Massestücke, schon im Gleichgewicht, mit Messpunkten für 1 und 2 Stücke
+[1, 2].forEach(k => springs.forEach(s => s.pts.set(k, { F: k * mPiece * g, s: k * mPiece * g / s.D })));
+setN(2);
+springs.forEach(s => { s.y = F() / s.D; s.settled = true; });
+updateTable();
+requestAnimationFrame(frame);
+})();
+</script>

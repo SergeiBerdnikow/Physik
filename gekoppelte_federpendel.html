@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gekoppelte Federpendel – Simulation</title>
+<!--
+  VORLAGE für Sergeis Simulationen (eine Datei, offline, keine externen Einbindungen).
+  Aufbau:
+    1. CSS (Farben als Variablen, große Bedienelemente für Beamer und Tablet)
+    2. HTML-Gerüst: Kopfzeile, Szene, Diagramm, Energiebalken, Steuerung, Regler, Erklärung
+    3. BAUKASTEN (allgemein, nicht ändern): Zahlformat, Canvas, Schleife, Diagramm, Balken,
+       Regler, Tastatur, Vollbild, Export, Schrittmodus
+    4. MODELL (hier anpassen): Zustand, Physik, Zeichnen, Regler, Presets, Schritte
+-->
+<style>
+  :root {
+    --hg: #ffffff; --flaeche: #f4f6f9; --rand: #d5dbe3; --text: #1b2430; --text2: #5a6675;
+    --akzent: #1f5c99;
+    /* feste Bedeutungsfarben – in allen Simulationen gleich verwenden */
+    --e-pot: #1f77b4;   /* Lage-/Spannenergie: blau   */
+    --e-kin: #d95f02;   /* Bewegungsenergie: orange   */
+    --e-th:  #7b3294;   /* innere/thermische Energie: violett */
+    --e-ges: #2b2b2b;   /* Gesamtenergie: dunkelgrau  */
+    --kurve1: #1f5c99; --kurve2: #c62828; --kurve3: #2e7d32;
+    --schrift: system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+    body { margin: 0; background: var(--flaeche); color: var(--text); font-family: var(--schrift);
+         font-size: 1rem; line-height: 1.4; }
+  body.gross { font-size: 1.25rem; }          /* Beamer-Ansicht */
+  header { display: flex; align-items: center; gap: .8em; padding: .5em 1em;
+           background: var(--akzent); color: #fff; flex-wrap: wrap; }
+  header h1 { font-size: 1.3em; margin: 0; font-weight: 600; flex: 1 1 auto; }
+  header button { background: rgba(255,255,255,.15); color: #fff; border-color: rgba(255,255,255,.4); }
+  main { display: grid; gap: .8em; padding: .8em;
+         grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+         grid-template-areas: "szene diagramm" "steuerung balken" "regler regler" "info info"; }
+  @media (max-width: 900px) {
+    main { grid-template-columns: minmax(0, 1fr);
+           grid-template-areas: "szene" "steuerung" "diagramm" "balken" "regler" "info"; }
+  }
+  .karte { background: var(--hg); border: 1px solid var(--rand); border-radius: 10px; padding: .7em;
+           min-width: 0; }
+  .karte h2 { font-size: 1em; margin: 0 0 .4em; color: var(--text2); font-weight: 600; }
+  #szeneKarte { grid-area: szene; } #diagrammKarte { grid-area: diagramm; }
+  #balkenKarte { grid-area: balken; } #steuerKarte { grid-area: steuerung; }
+  #reglerKarte { grid-area: regler; } #infoKarte { grid-area: info; }
+  canvas { display: block; width: 100%; touch-action: none; }
+  #szene { height: 46vh; min-height: 240px; }
+  #diagramm { height: 46vh; min-height: 220px; }
+  #balken { height: 190px; }
+  button { font: inherit; font-size: 1em; padding: .45em .9em; min-height: 2.6em; min-width: 2.6em;
+           border-radius: 8px; border: 1px solid var(--rand); background: var(--hg); color: var(--text);
+           cursor: pointer; }
+  button:hover { border-color: var(--akzent); }
+  button.haupt { background: var(--akzent); color: #fff; border-color: var(--akzent); font-weight: 600; }
+  button.aktiv { outline: 3px solid var(--akzent); outline-offset: 1px; }
+  .zeile { display: flex; flex-wrap: wrap; gap: .5em; align-items: center; }
+  .messwerte { display: grid; grid-template-columns: repeat(auto-fit, minmax(9em, 1fr)); gap: .3em .8em;
+               margin-top: .6em; font-variant-numeric: tabular-nums; }
+  .messwerte div { background: var(--flaeche); border-radius: 6px; padding: .25em .5em; }
+  .messwerte b { font-weight: 600; }
+  .regler { display: grid; grid-template-columns: repeat(auto-fit, minmax(16em, 1fr)); gap: .6em 1.4em; }
+  .regler label { display: block; font-weight: 600; }
+  .regler .wert { float: right; font-weight: 400; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; height: 2.2em; accent-color: var(--akzent); }
+  .presets { margin-top: .7em; }
+  #schritte { display: none; margin-top: .6em; padding: .6em .8em; border-left: 5px solid var(--akzent);
+              background: #eef4fb; border-radius: 6px; }
+  #schritte.an { display: block; }
+  #schrittText { font-size: 1.1em; margin: .2em 0 .5em; }
+  details summary { cursor: pointer; font-weight: 600; }
+  .klein { color: var(--text2); font-size: .85em; }
+  button.gross { min-width: 3.2em; font-weight: 700; font-size: 1.2em; }
+  .unterzeile { margin-top: .6em; }
+  .unterzeile > b { margin-right: .3em; }
+  kbd { border: 1px solid var(--rand); border-bottom-width: 2px; border-radius: 4px; padding: 0 .3em;
+        font-size: .85em; background: var(--flaeche); }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="titel">Gekoppelte Federpendel – vom Pendel zur Welle</h1>
+  <button id="btnGross" title="Große Schrift für den Beamer (G)">Beamer-Ansicht</button>
+  <button id="btnVoll" title="Vollbild (F)">Vollbild</button>
+</header>
+
+<main>
+  <section class="karte" id="szeneKarte">
+    <h2>Versuch</h2>
+    <canvas id="szene" aria-label="Animation des Versuchs"></canvas>
+    <p class="klein">Tipp: Im Pausenzustand kannst du jeden Pendelkörper einzeln mit Maus oder Finger auslenken.</p>
+  </section>
+
+  <section class="karte" id="diagrammKarte">
+    <h2 id="diagrammTitel">Diagramm</h2>
+    <canvas id="diagramm" aria-label="Diagramm"></canvas>
+    <div class="zeile" id="kurvenwahl"></div>
+  </section>
+
+  <section class="karte" id="steuerKarte">
+    <div class="zeile">
+      <button id="btnStart" class="haupt" title="Start/Pause (Leertaste)">▶ Start</button>
+      <button id="btnSchritt" title="Einzelschritt (→)">Einzelschritt</button>
+      <button id="btnReset" title="Zurücksetzen (R)">↺ Zurücksetzen</button>
+      <button id="btnLangsam" title="Zeitlupe umschalten (L)">Zeitlupe: aus</button>
+    </div>
+    <div class="zeile unterzeile" id="anzahl"><b>Anzahl der Pendel:</b></div>
+    <div class="messwerte" id="messwerte"></div>
+    <div id="schritte">
+      <div class="zeile" style="justify-content:space-between">
+        <b id="schrittNr"></b>
+        <span class="zeile"><button id="btnZurueck">◀ zurück</button><button id="btnWeiter" class="haupt">weiter ▶</button></span>
+      </div>
+      <div id="schrittText"></div>
+    </div>
+  </section>
+
+  <section class="karte" id="balkenKarte">
+    <h2>Energie der einzelnen Pendel</h2>
+    <canvas id="balken" aria-label="Energiebalken"></canvas>
+  </section>
+
+  <section class="karte" id="reglerKarte">
+    <h2>Einstellungen</h2>
+    <div class="zeile" id="muster" style="margin-bottom:.8em"><b>Start:</b></div>
+    <div class="regler" id="regler"></div>
+    <div class="zeile presets" id="presets"></div>
+    <div class="zeile presets">
+      <button id="btnSchrittmodus">Schritt für Schritt besprechen</button>
+      <button id="btnCSV" title="Messwerte als Tabelle speichern">Messwerte speichern (CSV)</button>
+      <button id="btnPNG" title="Bild von Versuch und Diagramm speichern">Bild speichern (PNG)</button>
+    </div>
+  </section>
+
+  <section class="karte" id="infoKarte">
+    <details>
+      <summary>Was wird hier simuliert?</summary>
+      <div id="infoText"></div>
+    </details>
+    <p class="klein">Tastatur: <kbd>Leertaste</kbd> Start/Pause · <kbd>R</kbd> Zurücksetzen ·
+      <kbd>→</kbd> Einzelschritt · <kbd>L</kbd> Zeitlupe · <kbd>G</kbd> Beamer-Ansicht · <kbd>F</kbd> Vollbild</p>
+  </section>
+</main>
+
+<script>
+"use strict";
+/* =====================================================================
+   BAUKASTEN – allgemein verwendbar, in neuen Simulationen unverändert lassen
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+/** Schriftgröße auf der Leinwand – wächst in der Beamer-Ansicht mit */
+const fs = px => Math.round(px * (document.body.classList.contains("gross") ? 1.3 : 1));
+
+/** Zahl deutsch formatieren: fmt(1.234, 2, "m") -> "1,23 m" */
+function fmt(x, stellen = 2, einheit = "") {
+  if (!isFinite(x)) return "–";
+  const s = x.toLocaleString("de-DE", { minimumFractionDigits: stellen, maximumFractionDigits: stellen });
+  return einheit ? s + " " + einheit : s;
+}
+
+/** Canvas mit scharfer Darstellung (HiDPI). Liefert {ctx, b, h} in CSS-Pixeln, passt sich an. */
+function leinwand(canvas, beiGroesse) {
+  const obj = { canvas, ctx: canvas.getContext("2d"), b: 0, h: 0 };
+  const anpassen = (melden = true) => {
+    const r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    obj.b = Math.max(1, r.width); obj.h = Math.max(1, r.height);
+    canvas.width = Math.round(obj.b * dpr); canvas.height = Math.round(obj.h * dpr);
+    obj.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (melden && beiGroesse) beiGroesse();
+  };
+  anpassen(false);                       // Größe sofort setzen, Neuzeichnen erst bei Änderungen
+  new ResizeObserver(() => anpassen()).observe(canvas);
+  return obj;
+}
+
+/** Pfeil zeichnen (für Kräfte, Geschwindigkeiten, Maße) */
+function pfeil(ctx, x1, y1, x2, y2, farbe, breite = 3, spitze = 12) {
+  const w = Math.atan2(y2 - y1, x2 - x1), l = Math.hypot(x2 - x1, y2 - y1);
+  if (l < 1) return;
+  const s = Math.min(spitze, l * 0.6);
+  ctx.save(); ctx.strokeStyle = ctx.fillStyle = farbe; ctx.lineWidth = breite; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - s * 0.7 * Math.cos(w), y2 - s * 0.7 * Math.sin(w)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - s * Math.cos(w - 0.4), y2 - s * Math.sin(w - 0.4));
+  ctx.lineTo(x2 - s * Math.cos(w + 0.4), y2 - s * Math.sin(w + 0.4)); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+/** Text mit Hintergrund (gut lesbar über Linien) */
+function beschriftung(ctx, text, x, y, { farbe = "#1b2430", groesse = 15, ausrichtung = "center",
+                                        grundlinie = "middle", fett = false, hintergrund = true } = {}) {
+  ctx.save(); groesse = fs(groesse); ctx.font = `${fett ? "600 " : ""}${groesse}px ${css("--schrift")}`;
+  ctx.textAlign = ausrichtung; ctx.textBaseline = grundlinie;
+  const m = ctx.measureText(text), pad = 3;
+  let x0 = ausrichtung === "center" ? x - m.width / 2 : ausrichtung === "right" ? x - m.width : x;
+  if (hintergrund) { ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.fillRect(x0 - pad, y - groesse * 0.6 - pad, m.width + 2 * pad, groesse * 1.2 + 2 * pad); }
+  ctx.fillStyle = farbe; ctx.fillText(text, x, y); ctx.restore();
+}
+
+/** "Schöne" Achsenteilung */
+function teilung(min, max, ziel = 6) {
+  const roh = (max - min) / ziel, p = Math.pow(10, Math.floor(Math.log10(roh)));
+  const f = roh / p, schritt = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
+  const t = []; for (let v = Math.ceil(min / schritt) * schritt; v <= max + 1e-9 * schritt; v += schritt) t.push(v);
+  return { t, schritt, stellen: Math.max(0, -Math.floor(Math.log10(schritt) + 1e-9)) };
+}
+
+/**
+ * Live-Diagramm (Zeitreihen). Beispiel:
+ *   const d = new Diagramm(canvas, {xName:"t", xEinheit:"s", yName:"x", yEinheit:"m", fenster:10});
+ *   d.reihe("x", "Auslenkung", "#1f5c99");  d.punkt("x", t, x);  d.zeichnen();
+ * fenster = sichtbare Zeitspanne (mitlaufend); yMin/yMax fest oder automatisch.
+ */
+class Diagramm {
+  constructor(canvas, opt) {
+    this.o = Object.assign({ xName: "t", xEinheit: "s", yName: null, yEinheit: "", fenster: 10,
+                             yMin: null, yMax: null }, opt);
+    this.reihen = new Map(); this.lw = leinwand(canvas, () => this.zeichnen());
+  }
+  /** name = Text für den Knopf, achse = Achsenbeschriftung, z. B. "s in cm" */
+  reihe(id, name, farbe, sichtbar = true, achse = name) { this.reihen.set(id, { name, farbe, sichtbar, achse, d: [] }); }
+  punkt(id, x, y) { const r = this.reihen.get(id); r.d.push([x, y]); if (r.d.length > 20000) r.d.splice(0, 5000); }
+  leeren() { for (const r of this.reihen.values()) r.d = []; }
+  achsen(opt) { Object.assign(this.o, opt); }
+  zeichnen() {
+    const { ctx, b, h } = this.lw, o = this.o, R = { l: 62, r: 14, o: 18, u: 46 };
+    ctx.clearRect(0, 0, b, h);
+    const sicht = [...this.reihen.values()].filter(r => r.sichtbar);
+    let xMax = 0; for (const r of sicht) if (r.d.length) xMax = Math.max(xMax, r.d[r.d.length - 1][0]);
+    const x1 = Math.max(o.fenster, xMax), x0 = x1 - o.fenster;
+    let y0 = o.yMin, y1 = o.yMax;
+    if (y0 === null || y1 === null) {
+      let lo = Infinity, hi = -Infinity;
+      for (const r of sicht) for (const [x, y] of r.d) if (x >= x0) { lo = Math.min(lo, y); hi = Math.max(hi, y); }
+      if (!isFinite(lo)) { lo = -1; hi = 1; }
+      if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+      const rand = 0.1 * (hi - lo);
+      if (y0 === null) y0 = lo - rand; if (y1 === null) y1 = hi + rand;
+    }
+    const X = x => R.l + (x - x0) / (x1 - x0) * (b - R.l - R.r);
+    const Y = y => h - R.u - (y - y0) / (y1 - y0) * (h - R.o - R.u);
+    ctx.font = `${fs(13)}px ${css("--schrift")}`; ctx.lineWidth = 1;
+    const tx = teilung(x0, x1, Math.max(3, Math.floor(b / 90))), ty = teilung(y0, y1, Math.max(3, Math.floor(h / 55)));
+    ctx.strokeStyle = "#e3e7ec"; ctx.fillStyle = "#5a6675";
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (const v of tx.t) { ctx.beginPath(); ctx.moveTo(X(v), R.o); ctx.lineTo(X(v), h - R.u); ctx.stroke();
+                            ctx.fillText(fmt(v, tx.stellen), X(v), h - R.u + 5); }
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (const v of ty.t) { ctx.beginPath(); ctx.moveTo(R.l, Y(v)); ctx.lineTo(b - R.r, Y(v)); ctx.stroke();
+                            ctx.fillText(fmt(v, ty.stellen), R.l - 6, Y(v)); }
+    // Achsen (Nulllinie hervorheben)
+    ctx.strokeStyle = "#1b2430"; ctx.lineWidth = 1.5; ctx.beginPath();
+    const yNull = (y0 < 0 && y1 > 0) ? Y(0) : h - R.u;
+    ctx.moveTo(R.l, yNull); ctx.lineTo(b - R.r, yNull); ctx.moveTo(R.l, R.o); ctx.lineTo(R.l, h - R.u); ctx.stroke();
+    ctx.fillStyle = "#1b2430"; ctx.font = `600 ${fs(14)}px ${css("--schrift")}`;
+    ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+    ctx.fillText(`${o.xName} in ${o.xEinheit}`, b - R.r, h - 4);
+    ctx.save(); ctx.translate(14, R.o); ctx.rotate(-Math.PI / 2); ctx.textAlign = "right"; ctx.textBaseline = "top";
+    const yText = o.yName ? (o.yEinheit ? `${o.yName} in ${o.yEinheit}` : o.yName) : sicht.map(r => r.achse).join(",  ");
+    ctx.fillText(yText, 0, 0); ctx.restore();
+    // Kurven
+    ctx.save(); ctx.beginPath(); ctx.rect(R.l, R.o, b - R.l - R.r, h - R.o - R.u); ctx.clip();
+    for (const r of sicht) {
+      ctx.strokeStyle = r.farbe; ctx.lineWidth = 2.5; ctx.beginPath(); let an = false;
+      for (const [x, y] of r.d) { if (x < x0 - 1e-9) continue; an ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)); an = true; }
+      ctx.stroke();
+      if (r.d.length) { const [x, y] = r.d[r.d.length - 1]; ctx.fillStyle = r.farbe;
+                        ctx.beginPath(); ctx.arc(X(x), Y(y), 4.5, 0, 7); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+  /** Knöpfe zum Ein-/Ausblenden der Kurven in ein Element einfügen */
+  auswahl(el) {
+    el.innerHTML = "";
+    for (const [id, r] of this.reihen) {
+      const k = document.createElement("button");
+      k.innerHTML = `<span style="color:${r.farbe}">━━</span> ${r.name}`;
+      k.classList.toggle("aktiv", r.sichtbar);
+      k.onclick = () => { r.sichtbar = !r.sichtbar; k.classList.toggle("aktiv", r.sichtbar); this.zeichnen(); };
+      el.appendChild(k);
+    }
+  }
+}
+
+/**
+ * Energiebalken. Beispiel:
+ *   const eb = new Balken(canvas, [{id:"pot", name:"E_Spann", farbe:css("--e-pot")}, ...], "J");
+ *   eb.zeichnen({pot: 0.2, kin: 0.1, ges: 0.3}, maxWert);
+ */
+class Balken {
+  constructor(canvas, arten, einheit = "J") { this.arten = arten; this.einheit = einheit;
+    this.lw = leinwand(canvas, () => this.letzte && this.zeichnen(...this.letzte)); }
+  zeichnen(werte, max) {
+    this.letzte = [werte, max];
+    const { ctx, b, h } = this.lw, n = this.arten.length, R = { l: 10, r: 10, o: 26, u: 30 };
+    ctx.clearRect(0, 0, b, h);
+    const bw = (b - R.l - R.r) / n, H = h - R.o - R.u, sk = max > 0 ? H / max : 0;
+    ctx.strokeStyle = "#1b2430"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(R.l, h - R.u); ctx.lineTo(b - R.r, h - R.u); ctx.stroke();
+    this.arten.forEach((a, i) => {
+      const v = Math.max(0, werte[a.id] || 0), x = R.l + i * bw + bw * 0.18, w = bw * 0.64;
+      ctx.fillStyle = a.farbe; ctx.fillRect(x, h - R.u - v * sk, w, v * sk);
+      ctx.font = `600 ${fs(14)}px ${css("--schrift")}`; ctx.fillStyle = "#1b2430"; ctx.textAlign = "center";
+      ctx.textBaseline = "top"; ctx.fillText(a.name, x + w / 2, h - R.u + 6);
+      ctx.textBaseline = "bottom"; ctx.font = `${fs(13)}px ${css("--schrift")}`;
+      ctx.fillText(fmt(werte[a.id] || 0, a.stellen ?? 2, this.einheit), x + w / 2, Math.max(R.o + 2, h - R.u - v * sk - 4));
+    });
+  }
+}
+
+/** Regler erzeugen. Liefert Objekt mit .wert; ruft beiAenderung(wert) auf. */
+function regler(container, { id, name, min, max, schritt, wert, einheit = "", stellen = 2, beiAenderung }) {
+  const box = document.createElement("div");
+  box.innerHTML = `<label for="r_${id}">${name} <span class="wert" id="w_${id}"></span></label>
+                   <input type="range" id="r_${id}" min="${min}" max="${max}" step="${schritt}" value="${wert}">`;
+  container.appendChild(box);
+  const inp = box.querySelector("input"), anz = box.querySelector(".wert");
+  const r = { get wert() { return parseFloat(inp.value); },
+              setzen(v) { inp.value = v; anz.textContent = fmt(parseFloat(inp.value), stellen, einheit); },
+              sperren(an) { inp.disabled = an; } };
+  r.setzen(wert);
+  inp.addEventListener("input", () => { anz.textContent = fmt(r.wert, stellen, einheit); beiAenderung && beiAenderung(r.wert); });
+  return r;
+}
+
+/** Datei aus der Seite heraus speichern (funktioniert offline) */
+function speichern(name, inhalt, typ) {
+  const a = document.createElement("a");
+  a.href = typeof inhalt === "string" ? URL.createObjectURL(new Blob([inhalt], { type: typ })) : inhalt;
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+
+/** Mehrere Canvas nebeneinander als ein PNG speichern */
+function alsPNG(name, canvasListe) {
+  const b = canvasListe.reduce((s, c) => s + c.width, 0), h = Math.max(...canvasListe.map(c => c.height));
+  const z = document.createElement("canvas"); z.width = b; z.height = h;
+  const ctx = z.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, b, h);
+  let x = 0; for (const c of canvasListe) { ctx.drawImage(c, x, 0); x += c.width; }
+  speichern(name, z.toDataURL("image/png"));
+}
+
+/**
+ * Simulationsschleife mit festem Zeitschritt (physikalisch sauber, unabhängig von der Bildrate).
+ *   const lauf = new Schleife({dt: 0.001, schritt: dt => {...}, bild: () => {...}});
+ *   lauf.start(); lauf.pause(); lauf.tempo = 0.2 (Zeitlupe)
+ */
+class Schleife {
+  constructor({ dt, schritt, bild, beiStatus }) {
+    Object.assign(this, { dt, schritt, bild, beiStatus, laeuft: false, tempo: 1, rest: 0, tAlt: 0 });
+    const tick = tJetzt => {
+      if (this.laeuft) {
+        let echt = Math.min(0.1, (tJetzt - this.tAlt) / 1000);   // nach Tab-Wechsel nicht springen
+        this.rest += echt * this.tempo;
+        let n = 0; while (this.rest >= this.dt && n < 20000) { this.schritt(this.dt); this.rest -= this.dt; n++; }
+      }
+      this.tAlt = tJetzt; this.bild(); requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  start() { this.laeuft = true; this.beiStatus && this.beiStatus(true); }
+  pause() { this.laeuft = false; this.beiStatus && this.beiStatus(false); }
+  umschalten() { this.laeuft ? this.pause() : this.start(); }
+  einzelschritt(dauer) { this.pause(); const n = Math.round(dauer / this.dt); for (let i = 0; i < n; i++) this.schritt(this.dt); }
+}
+
+/**
+ * Schritt-für-Schritt-Modus zum Besprechen im Plenum.
+ *   schrittmodus([{text:"…", vorbereiten: () => {...}}, ...])
+ */
+function schrittmodus(schritte) {
+  let i = 0; const box = $("schritte");
+  const zeigen = () => { $("schrittNr").textContent = `Schritt ${i + 1} von ${schritte.length}`;
+    $("schrittText").innerHTML = schritte[i].text; schritte[i].vorbereiten && schritte[i].vorbereiten();
+    $("btnZurueck").disabled = i === 0; $("btnWeiter").disabled = i === schritte.length - 1; };
+  $("btnZurueck").onclick = () => { if (i > 0) { i--; zeigen(); } };
+  $("btnWeiter").onclick = () => { if (i < schritte.length - 1) { i++; zeigen(); } };
+  return { an() { box.classList.add("an"); i = 0; zeigen(); }, aus() { box.classList.remove("an"); },
+           get aktiv() { return box.classList.contains("an"); } };
+}
+
+/** Vollbild, Beamer-Ansicht, Tastatur */
+function bedienungEinrichten(lauf, { reset, einzel }) {
+  $("btnVoll").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  $("btnGross").onclick = () => { document.body.classList.toggle("gross"); $("btnGross").classList.toggle("aktiv"); };
+  $("btnStart").onclick = () => lauf.umschalten();
+  $("btnReset").onclick = reset;
+  $("btnSchritt").onclick = einzel;
+  $("btnLangsam").onclick = () => { lauf.tempo = lauf.tempo === 1 ? 0.2 : 1;
+    $("btnLangsam").textContent = `Zeitlupe: ${lauf.tempo === 1 ? "aus" : "an (×0,2)"}`;
+    $("btnLangsam").classList.toggle("aktiv", lauf.tempo !== 1); };
+  lauf.beiStatus = an => { $("btnStart").textContent = an ? "❚❚ Pause" : "▶ Start"; };
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT" && e.key !== " ") return;
+    const k = e.key.toLowerCase();
+    if (k === " ") { e.preventDefault(); lauf.umschalten(); }
+    else if (k === "r") reset(); else if (k === "arrowright") einzel();
+    else if (k === "l") $("btnLangsam").click(); else if (k === "g") $("btnGross").click();
+    else if (k === "f") $("btnVoll").click();
+  });
+}
+
+/* =====================================================================
+   MODELL – gekoppelte Federpendel (1 bis 5 Pendel in einer Reihe)
+   Jedes Pendel ist mit seinen Nachbarn durch eine Kopplungsfeder (Federkonstante k) verbunden.
+   Physik:  m·a_i = −D·y_i − k·(y_i − y_{i−1}) − k·(y_i − y_{i+1})   (y nach oben, ab der Ruhelage)
+   Integration: Velocity-Verlet mit dt = 1 ms  →  Gesamtenergie bleibt erhalten
+   ===================================================================== */
+const ART = "feder";                               // "feder" oder "faden"
+const FEDER = ART === "feder";
+const FARBEN = ["#1f5c99", "#c62828", "#2e7d32", "#ef6c00", "#00838f"];
+const g = 9.81, ABSTAND = 0.4;                       // Fadenpendel: Abstand der Aufhängungen in m
+const STANDARD = FEDER ? { N: 2, m: 0.2, D: 8, k: 1.0, A: 0.05 }
+                       : { N: 2, m: 0.2, l: 1.0, k: 0.4, A: 0.10 };
+const P = Object.assign({}, STANDARD);               // Parameter in SI-Einheiten (A = Startauslenkung in m)
+let muster = "erstes";                               // Startmuster: erstes | alle | abwechselnd
+let S0 = [];                                         // Startwerte der Koordinaten
+const Z = { t: 0, q: [], v: [] };                    // Zustand: q = y in m (Feder) bzw. φ in rad (Faden)
+const messreihe = [];
+
+/** Auslenkung in m (Feder: y, Faden: Bogen s = l·φ) */
+const auslenkung = i => FEDER ? Z.q[i] : P.l * Z.q[i];
+/** Koordinate aus Auslenkung in m */
+const koordinate = s => FEDER ? s : s / P.l;
+
+function beschleunigungen(q) {
+  const N = q.length, a = new Array(N);
+  if (FEDER) {
+    for (let i = 0; i < N; i++) {
+      let F = -P.D * q[i];
+      if (i > 0) F -= P.k * (q[i] - q[i - 1]);
+      if (i < N - 1) F -= P.k * (q[i] - q[i + 1]);
+      a[i] = F / P.m;
+    }
+  } else {
+    const x = q.map(f => P.l * Math.sin(f));         // waagerechte Lage der Kugeln
+    for (let i = 0; i < N; i++) {
+      let Fk = 0;
+      if (i > 0) Fk -= P.k * (x[i] - x[i - 1]);
+      if (i < N - 1) Fk -= P.k * (x[i] - x[i + 1]);
+      a[i] = -(g / P.l) * Math.sin(q[i]) + Fk * Math.cos(q[i]) / (P.m * P.l);
+    }
+  }
+  return a;
+}
+
+function physikSchritt(dt) {                         // Velocity-Verlet (Kräfte hängen nur vom Ort ab)
+  const N = Z.q.length, a = beschleunigungen(Z.q);
+  for (let i = 0; i < N; i++) Z.q[i] += Z.v[i] * dt + 0.5 * a[i] * dt * dt;
+  const aNeu = beschleunigungen(Z.q);
+  for (let i = 0; i < N; i++) Z.v[i] += 0.5 * (a[i] + aNeu[i]) * dt;
+  Z.t += dt;
+  if (Math.round(Z.t / dt) % 20 === 0) aufzeichnen();
+}
+
+/** Energie jedes Pendels; die Energie einer Kopplungsfeder wird je zur Hälfte auf beide Pendel verteilt */
+function energien() {
+  const N = Z.q.length, E = new Array(N).fill(0);
+  const pos = i => FEDER ? Z.q[i] : P.l * Math.sin(Z.q[i]);
+  for (let i = 0; i < N; i++)
+    E[i] = FEDER ? 0.5 * P.m * Z.v[i] ** 2 + 0.5 * P.D * Z.q[i] ** 2
+                 : 0.5 * P.m * (P.l * Z.v[i]) ** 2 + P.m * g * P.l * (1 - Math.cos(Z.q[i]));
+  for (let i = 0; i < N - 1; i++) { const Ek = 0.5 * P.k * (pos(i) - pos(i + 1)) ** 2; E[i] += Ek / 2; E[i + 1] += Ek / 2; }
+  return E;
+}
+const omega0 = () => FEDER ? Math.sqrt(P.D / P.m) : Math.sqrt(g / P.l);
+const periode = () => 2 * Math.PI / omega0();
+/** Zwei Pendel: Zeit, bis die Energie ganz beim zweiten Pendel ist (π / (ω₂ − ω₁)) */
+function uebergabezeit() {
+  const w1 = omega0(), w2 = Math.sqrt(w1 * w1 + 2 * P.k / P.m);
+  return P.k > 0 ? Math.PI / (w2 - w1) : Infinity;
+}
+
+function aufzeichnen() {
+  for (let i = 0; i < Z.q.length; i++) diagramm.punkt("p" + i, Z.t, auslenkung(i) * 100);
+  messreihe.push([Z.t, ...Z.q.map((_, i) => auslenkung(i))]);
+}
+
+/* ---------- Szene zeichnen ---------- */
+const szene = leinwand($("szene"), () => szeneZeichnen());
+let zeigeWelle = false;
+
+/** Zickzack-Feder von (x1,y1) nach (x2,y2) mit fester Windungszahl */
+function feder(ctx, x1, y1, x2, y2, { n = 12, breite = 9, farbe = "#444", dicke = 2.2, ende = 8 } = {}) {
+  const l = Math.hypot(x2 - x1, y2 - y1); if (l < 1) return;
+  const ux = (x2 - x1) / l, uy = (y2 - y1) / l, nx = -uy, ny = ux, e = Math.min(ende, l * 0.15);
+  ctx.save(); ctx.strokeStyle = farbe; ctx.lineWidth = dicke; ctx.lineJoin = "round"; ctx.beginPath();
+  ctx.moveTo(x1, y1); ctx.lineTo(x1 + ux * e, y1 + uy * e);
+  for (let i = 0; i < n; i++) {
+    const d = e + (i + 0.5) * (l - 2 * e) / n, s = i % 2 ? breite : -breite;
+    ctx.lineTo(x1 + ux * d + nx * s, y1 + uy * d + ny * s);
+  }
+  ctx.lineTo(x2 - ux * e, y2 - uy * e); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
+}
+
+/** Glatte Linie durch die Punkte (für die Darstellung der Welle) */
+function wellenlinie(ctx, pkt) {
+  if (pkt.length < 2) return;
+  ctx.save(); ctx.strokeStyle = css("--akzent"); ctx.globalAlpha = 0.55; ctx.lineWidth = 5; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(pkt[0][0], pkt[0][1]);
+  for (let i = 0; i < pkt.length - 1; i++) {
+    const p0 = pkt[Math.max(0, i - 1)], p1 = pkt[i], p2 = pkt[i + 1], p3 = pkt[Math.min(pkt.length - 1, i + 2)];
+    ctx.bezierCurveTo(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6,
+                      p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6, p2[0], p2[1]);
+  }
+  ctx.stroke(); ctx.restore();
+}
+
+function decke(ctx, x0, x1, y) {
+  ctx.fillStyle = "#8a96a5"; ctx.fillRect(x0, y - 10, x1 - x0, 10);
+  ctx.strokeStyle = "#8a96a5"; ctx.lineWidth = 1.5;
+  for (let x = x0 + 4; x < x1; x += 12) { ctx.beginPath(); ctx.moveTo(x, y - 10); ctx.lineTo(x + 8, y - 18); ctx.stroke(); }
+}
+
+function szeneZeichnen() {
+  const { ctx, b, h } = szene, N = Z.q.length;
+  ctx.clearRect(0, 0, b, h);
+  const koerper = [];
+  if (FEDER) {
+    const abst = Math.min(b / (N + 0.6), 190), x0 = b / 2 - abst * (N - 1) / 2, oben = 34;
+    const yR = h * 0.58, sk = (h * 0.27) / 0.12;      // 12 cm Auslenkung ≈ 27 % der Höhe
+    const kb = Math.min(58, abst * 0.42), kh = kb * 0.8;
+    decke(ctx, Math.max(4, x0 - abst / 2), Math.min(b - 4, x0 + abst * (N - 0.5)), oben);
+    ctx.setLineDash([6, 6]); ctx.strokeStyle = "#5a6675"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(8, yR); ctx.lineTo(b - 8, yR); ctx.stroke(); ctx.setLineDash([]);
+    beschriftung(ctx, "Ruhelage", 10, yR + 16, { groesse: 13, farbe: "#5a6675", ausrichtung: "left" });
+    for (let i = 0; i < N; i++) {
+      const x = x0 + i * abst, y = yR - Z.q[i] * sk;
+      koerper.push({ x, y, r: Math.max(kb, kh) / 2 + 8 });
+      feder(ctx, x, oben, x, y - kh / 2, { n: 14, breite: Math.min(10, kb * 0.2) });
+    }
+    if (P.k > 0) for (let i = 0; i < N - 1; i++) {
+      const a = koerper[i], c = koerper[i + 1];
+      feder(ctx, a.x + kb / 2, a.y, c.x - kb / 2, c.y, { n: 10, breite: 6, farbe: "#7a8594", dicke: 1.8 });
+    }
+    if (zeigeWelle) wellenlinie(ctx, koerper.map(k => [k.x, k.y]));
+    koerper.forEach((k, i) => {
+      ctx.fillStyle = FARBEN[i]; ctx.fillRect(k.x - kb / 2, k.y - kh / 2, kb, kh);
+      beschriftung(ctx, String(i + 1), k.x, k.y, { groesse: 16, farbe: "#fff", fett: true, hintergrund: false });
+    });
+    szene.geo = { koerper, sk, yR };
+  } else {
+    const breiteM = (N - 1) * ABSTAND + 2 * (0.35 * P.l + 0.15);
+    const hs = zeigeWelle ? Math.min(150, h * 0.32) : 0;   // Streifen für das Momentbild der Welle
+    const sk = Math.min((h - 90 - hs) / (P.l + 0.06), b / breiteM), oben = 34;
+    const x0 = b / 2 - sk * ABSTAND * (N - 1) / 2, L = P.l * sk;
+    const r = Math.max(11, Math.min(22, sk * ABSTAND * 0.22));
+    decke(ctx, Math.max(4, x0 - sk * 0.35 * P.l - 20), Math.min(b - 4, x0 + sk * ABSTAND * (N - 1) + sk * 0.35 * P.l + 20), oben);
+    for (let i = 0; i < N; i++) {
+      const xa = x0 + i * sk * ABSTAND;
+      ctx.setLineDash([5, 6]); ctx.strokeStyle = "#9aa4b0"; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(xa, oben); ctx.lineTo(xa, oben + L + r + 14); ctx.stroke(); ctx.setLineDash([]);
+      const x = xa + L * Math.sin(Z.q[i]), y = oben + L * Math.cos(Z.q[i]);
+      ctx.strokeStyle = "#333"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(xa, oben); ctx.lineTo(x, y); ctx.stroke();
+      ctx.fillStyle = "#333"; ctx.beginPath(); ctx.arc(xa, oben, 3.5, 0, 7); ctx.fill();
+      koerper.push({ x, y, r: r + 8, xa });
+    }
+    if (P.k > 0) for (let i = 0; i < N - 1; i++) {
+      const a = koerper[i], c = koerper[i + 1], l = Math.hypot(c.x - a.x, c.y - a.y) || 1;
+      const ux = (c.x - a.x) / l, uy = (c.y - a.y) / l;
+      feder(ctx, a.x + ux * r, a.y + uy * r, c.x - ux * r, c.y - uy * r, { n: 10, breite: 6, farbe: "#7a8594", dicke: 1.8 });
+    }
+    if (zeigeWelle) {                                   // Momentbild: Auslenkung jedes Pendels nach oben aufgetragen
+      const yb = h - hs / 2 - 8, sv = (hs * 0.42) / Math.max(0.05, Math.abs(P.A));
+      ctx.setLineDash([6, 6]); ctx.strokeStyle = "#5a6675"; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(koerper[0].xa - 30, yb); ctx.lineTo(koerper[N - 1].xa + 30, yb); ctx.stroke(); ctx.setLineDash([]);
+      const pkt = koerper.map((k, i) => [k.xa, yb - P.l * Z.q[i] * sv]);
+      wellenlinie(ctx, pkt);
+      pkt.forEach(([x, y], i) => { ctx.fillStyle = FARBEN[i]; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill(); });
+      beschriftung(ctx, "Momentbild: Auslenkung s jedes Pendels (rechts = nach oben)", b / 2, h - hs - 4,
+                   { groesse: 13, farbe: "#5a6675" });
+    }
+    koerper.forEach((k, i) => {
+      ctx.fillStyle = FARBEN[i]; ctx.beginPath(); ctx.arc(k.x, k.y, r, 0, 7); ctx.fill();
+      beschriftung(ctx, String(i + 1), k.x, k.y, { groesse: 15, farbe: "#fff", fett: true, hintergrund: false });
+    });
+    beschriftung(ctx, "Ruhelage gestrichelt", 10, oben + L + r + 22, { groesse: 13, farbe: "#5a6675", ausrichtung: "left" });
+    szene.geo = { koerper, sk, L };
+  }
+  if (N > 1 && P.k === 0) beschriftung(ctx, "ohne Kopplung", b - 10, h - 14, { groesse: 14, farbe: "#c62828", ausrichtung: "right" });
+}
+
+/* ---------- Diagramm, Balken, Messwerte ---------- */
+const diagramm = new Diagramm($("diagramm"), { xName: "t", xEinheit: "s", yName: FEDER ? "y" : "s", yEinheit: "cm",
+                                               fenster: FEDER ? 12 : 16 });
+$("diagrammTitel").textContent = FEDER ? "Auslenkung y der Pendel (mitlaufend)" : "Auslenkung s der Pendel (mitlaufend)";
+const balken = new Balken($("balken"), [], "J");
+
+function diagrammEinrichten() {
+  diagramm.reihen.clear();
+  for (let i = 0; i < P.N; i++) diagramm.reihe("p" + i, "Pendel " + (i + 1), FARBEN[i], true);
+  diagramm.auswahl($("kurvenwahl"));
+  balken.arten = [...Array(P.N)].map((_, i) => ({ id: "p" + i, name: "Pendel " + (i + 1), farbe: FARBEN[i], stellen: 3 }))
+    .concat(P.N > 1 ? [{ id: "ges", name: "Gesamt", farbe: css("--e-ges"), stellen: 3 }] : []);
+}
+
+let eMax = 1;
+function messwerteZeigen() {
+  const E = energien(), werte = { ges: E.reduce((s, e) => s + e, 0) };
+  E.forEach((e, i) => werte["p" + i] = e);
+  let html = `<div><b>t</b> = ${fmt(Z.t, 2, "s")}</div><div><b>Anzahl</b> = ${P.N} Pendel</div>
+              <div title="Periodendauer eines einzelnen Pendels ohne Kopplung"><b>T</b> (ein Pendel) = ${fmt(periode(), 2, "s")}</div>`;
+  if (P.N === 2 && P.k > 0)
+    html += `<div title="Zeit, bis die Energie vollständig beim zweiten Pendel angekommen ist (Startmuster: erstes Pendel)">
+             <b>Energie bei Pendel 2</b> nach ≈ ${fmt(uebergabezeit(), 1, "s")}</div>`;
+  $("messwerte").innerHTML = html;
+  balken.zeichnen(werte, eMax);
+}
+
+/* ---------- Startmuster, Regler und Presets ---------- */
+function startwerteSetzen() {
+  S0 = [...Array(P.N)].map((_, i) =>
+    muster === "erstes" ? (i === 0 ? P.A : 0) : muster === "alle" ? P.A : (i % 2 ? -P.A : P.A)).map(koordinate);
+  document.querySelectorAll("#muster button").forEach(k => k.classList.toggle("aktiv", k.dataset.m === muster));
+}
+function neuStart() {
+  lauf.pause();
+  Z.t = 0; Z.q = S0.slice(); Z.v = S0.map(() => 0);
+  eMax = Math.max(1e-6, energien().reduce((s, e) => s + e, 0)) * 1.08;
+  messreihe.length = 0; diagramm.leeren(); aufzeichnen();
+}
+function anzahlSetzen(n) {
+  P.N = n; diagrammEinrichten(); startwerteSetzen(); neuStart();
+  document.querySelectorAll("#anzahl button").forEach(k => k.classList.toggle("aktiv", +k.textContent === n));
+}
+
+for (let n = 1; n <= 5; n++) {
+  const k = document.createElement("button"); k.textContent = n; k.className = "gross";
+  k.onclick = () => { schritte.aus(); anzahlSetzen(n); };
+  $("anzahl").appendChild(k);
+}
+for (const [m, name] of [["erstes", "Nur Pendel 1 auslenken"], ["alle", "Alle gleich auslenken"], ["abwechselnd", "Abwechselnd auslenken"]]) {
+  const k = document.createElement("button"); k.textContent = name; k.dataset.m = m;
+  k.onclick = () => { schritte.aus(); muster = m; startwerteSetzen(); neuStart(); };
+  $("muster").appendChild(k);
+}
+
+const R = {};
+const parameterGeaendert = () => { startwerteSetzen(); neuStart(); };
+R.m = regler($("regler"), { id: "m", name: "Masse <i>m</i> (jedes Pendel)", min: 0.05, max: 1, schritt: 0.05, wert: P.m, einheit: "kg",
+                            beiAenderung: v => { P.m = v; parameterGeaendert(); } });
+if (FEDER)
+  R.D = regler($("regler"), { id: "D", name: "Federkonstante <i>D</i> (Aufhängung)", min: 2, max: 30, schritt: 0.5, wert: P.D, einheit: "N/m", stellen: 1,
+                              beiAenderung: v => { P.D = v; parameterGeaendert(); } });
+else
+  R.l = regler($("regler"), { id: "l", name: "Fadenlänge <i>l</i>", min: 0.25, max: 2, schritt: 0.05, wert: P.l, einheit: "m",
+                              beiAenderung: v => { P.l = v; parameterGeaendert(); } });
+R.k = regler($("regler"), { id: "k", name: "Kopplung: Federkonstante <i>k</i>", min: 0, max: FEDER ? 5 : 2, schritt: FEDER ? 0.1 : 0.05,
+                            wert: P.k, einheit: "N/m", beiAenderung: v => { P.k = v; parameterGeaendert(); } });
+R.A = regler($("regler"), { id: "A", name: FEDER ? "Startauslenkung <i>y</i>₀" : "Startauslenkung <i>s</i>₀", min: FEDER ? -10 : -20, max: FEDER ? 10 : 20,
+                            schritt: 1, wert: P.A * 100, einheit: "cm", stellen: 0,
+                            beiAenderung: v => { P.A = v / 100; parameterGeaendert(); } });
+
+const presets = [
+  { name: "Standard", werte: { k: STANDARD.k } },
+  { name: "Ohne Kopplung", werte: { k: 0 } },
+  { name: "Schwach gekoppelt", werte: { k: STANDARD.k / 2 } },
+  { name: "Stark gekoppelt", werte: { k: STANDARD.k * 4 } },
+];
+function werteSetzen(w) {
+  Object.assign(P, w);
+  for (const id in w) if (R[id]) R[id].setzen(id === "A" ? w[id] * 100 : w[id]);
+}
+for (const p of presets) {
+  const k = document.createElement("button"); k.textContent = p.name;
+  k.onclick = () => { schritte.aus(); werteSetzen(Object.assign({}, STANDARD, p.werte, { N: P.N })); parameterGeaendert(); };
+  $("presets").appendChild(k);
+}
+const welleKnopf = document.createElement("button");
+welleKnopf.textContent = "Welle sichtbar machen";
+welleKnopf.title = FEDER ? "Linie durch alle Pendelkörper zeichnen" : "Auslenkungen aller Pendel als Momentbild zeichnen";
+welleKnopf.onclick = () => { zeigeWelle = !zeigeWelle; welleKnopf.classList.toggle("aktiv", zeigeWelle); };
+$("presets").appendChild(welleKnopf);
+
+/* ---------- Ziehen mit Maus/Finger (nur im Pausenzustand) ---------- */
+let gezogen = -1;
+$("szene").addEventListener("pointerdown", e => {
+  if (lauf.laeuft || !szene.geo) return;
+  const r = $("szene").getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  gezogen = szene.geo.koerper.findIndex(k => Math.hypot(px - k.x, py - k.y) < k.r + 6);
+  if (gezogen >= 0) $("szene").setPointerCapture(e.pointerId);
+});
+$("szene").addEventListener("pointermove", e => {
+  if (gezogen < 0) return;
+  const r = $("szene").getBoundingClientRect(), G = szene.geo;
+  let s;
+  if (FEDER) s = (G.yR - (e.clientY - r.top)) / G.sk;
+  else { const k = G.koerper[gezogen]; s = P.l * Math.asin(Math.max(-0.5, Math.min(0.5, (e.clientX - r.left - k.xa) / G.L))); }
+  const grenze = FEDER ? 0.10 : 0.20;
+  s = Math.round(Math.max(-grenze, Math.min(grenze, s)) * 100) / 100;
+  S0[gezogen] = koordinate(s); muster = "eigen";
+  document.querySelectorAll("#muster button").forEach(k => k.classList.remove("aktiv"));
+  neuStart();
+});
+$("szene").addEventListener("pointerup", () => { gezogen = -1; });
+
+/* ---------- Schritt für Schritt (Besprechung im Plenum) ---------- */
+const WORT = FEDER ? "Federpendel" : "Fadenpendel";
+function vorbereiten(n, k, m, welle = false) {
+  werteSetzen(Object.assign({}, STANDARD, { k }));
+  muster = m; anzahlSetzen(n);
+  zeigeWelle = welle; welleKnopf.classList.toggle("aktiv", welle);
+  lauf.start();
+}
+const schritte = schrittmodus([
+  { text: `Ein einzelnes ${WORT} schwingt für sich allein. Seine Energie bleibt die ganze Zeit bei ihm.`,
+    vorbereiten: () => vorbereiten(1, STANDARD.k, "erstes") },
+  { text: `Zwei ${WORT}, <b>nicht gekoppelt</b>: Nur Pendel 1 wird ausgelenkt. Pendel 2 bleibt in Ruhe – es „merkt“ nichts.`,
+    vorbereiten: () => vorbereiten(2, 0, "erstes") },
+  { text: `Jetzt verbindet eine <b>Kopplungsfeder</b> die beiden Pendel. Beobachte: Pendel 2 beginnt zu schwingen, Pendel 1 wird ruhiger.
+           Die <b>Energie wandert</b> von Pendel 1 zu Pendel 2 und wieder zurück (Energiebalken!).`,
+    vorbereiten: () => vorbereiten(2, STANDARD.k, "erstes") },
+  { text: `Fünf gekoppelte ${WORT}: Die Schwingung von Pendel 1 wird <b>von Pendel zu Pendel weitergegeben</b>.
+           Jedes Pendel schwingt nur um seine eigene Ruhelage.`,
+    vorbereiten: () => vorbereiten(5, STANDARD.k * 2, "erstes") },
+  { text: `${FEDER ? "Verbindet man die Pendelkörper durch eine Linie" : "Zeichnet man die Auslenkungen aller Pendel nebeneinander auf (unten)"}, sieht man eine <b>Welle</b>, die durch die Kette läuft.
+           <b>Merke:</b> Gekoppelte Schwinger geben ihre Schwingung weiter. Eine Schwingung, die sich so ausbreitet, nennt man <b>Welle</b>.
+           Dabei wird <b>Energie</b> transportiert, aber kein Pendel wandert mit.`,
+    vorbereiten: () => vorbereiten(5, STANDARD.k * 2, "erstes", true) },
+]);
+$("btnSchrittmodus").onclick = () => schritte.aktiv ? schritte.aus() : schritte.an();
+
+/* ---------- Erklärung ---------- */
+$("infoText").innerHTML = `
+  <p><b>Gekoppelte Schwingungen:</b> Werden zwei Pendel durch eine Feder verbunden, sind sie <i>gekoppelt</i>.
+  Schwingt ein Pendel, zieht und drückt die Kopplungsfeder am Nachbarn. So wird Energie von einem Pendel auf das andere übertragen.
+  Bei zwei Pendeln wandert die Energie hin und her: Mal schwingt Pendel 1 stark, mal Pendel 2.
+  Je schwächer die Kopplung, desto länger dauert die Übergabe.</p>
+  <p><b>Viele gekoppelte Pendel – eine Welle:</b> Bei einer Kette aus vielen gekoppelten Pendeln wird die Schwingung von Pendel zu Pendel
+  weitergegeben. Eine Schwingung, die sich so im Raum ausbreitet, heißt <b>Welle</b>.
+  Die Welle transportiert Energie, aber keine Materie: Jedes Pendel bleibt an seinem Platz und schwingt nur um seine Ruhelage.</p>
+  <p><b>Startmuster:</b> Werden alle Pendel gleich ausgelenkt, ist die Kopplungsfeder nie gespannt –
+  alle schwingen wie einzelne Pendel. Die Energiebalken zeigen die Energie jedes Pendels
+  (die Energie einer Kopplungsfeder wird je zur Hälfte den beiden Nachbarn zugerechnet).</p>
+  <p class="klein">Modell: Jeder Körper (Masse <i>m</i>) hängt an einer Feder (<i>D</i>), Nachbarn sind durch Kopplungsfedern (<i>k</i>) verbunden.
+  <i>m</i>·<i>a</i><sub><i>i</i></sub> = −<i>D</i>·<i>y</i><sub><i>i</i></sub> − <i>k</i>·(<i>y</i><sub><i>i</i></sub> − <i>y</i><sub><i>i</i>−1</sub>) − <i>k</i>·(<i>y</i><sub><i>i</i></sub> − <i>y</i><sub><i>i</i>+1</sub>),
+  <i>y</i> nach oben positiv, gemessen ab der Ruhelage. Ein Pendel allein: <i>T</i> = 2π·√(<i>m</i>/<i>D</i>).
+  Rechnung: Velocity-Verlet-Verfahren mit Zeitschritt 1 ms.</p>`;
+
+/* ---------- Start ---------- */
+const lauf = new Schleife({ dt: 0.001, schritt: physikSchritt,
+                            bild: () => { szeneZeichnen(); diagramm.zeichnen(); messwerteZeigen(); } });
+bedienungEinrichten(lauf, { reset: () => { schritte.aus(); neuStart(); },
+                            einzel: () => lauf.einzelschritt(0.05) });
+$("btnCSV").onclick = () => speichern(`gekoppelte_${ART}pendel_messwerte.csv`,
+  ["t in s", ...[...Array(P.N)].map((_, i) => `${FEDER ? "y" : "s"}${i + 1} in m`)].join(";") + "\n" +
+  messreihe.map(z => z.map(w => w.toFixed(5).replace(".", ",")).join(";")).join("\n"), "text/csv");
+$("btnPNG").onclick = () => alsPNG(`gekoppelte_${ART}pendel.png`, [$("szene"), $("diagramm")]);
+anzahlSetzen(P.N);
+</script>
+</body>
+</html>

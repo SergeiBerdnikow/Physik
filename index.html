@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Physik-Simulationen Q1</title>
+<style>
+  :root { --hg: #f4f6f9; --karte: #fff; --rand: #d5dbe3; --text: #1b2430; --text2: #5a6675; --akzent: #1f5c99; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--hg); color: var(--text); font: 1.05rem/1.45 system-ui, "Segoe UI", Roboto, Arial, sans-serif; }
+  header { background: var(--akzent); color: #fff; padding: 1em 16px; }
+  header h1 { margin: 0; font-size: 1.4em; }
+  header p { margin: .2em 0 0; opacity: .85; }
+  main { max-width: 900px; margin: 0 auto; padding: 16px; display: grid; gap: 12px;
+         grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  a.karte { display: block; background: var(--karte); border: 1px solid var(--rand); border-radius: 12px;
+            padding: 1em; color: inherit; text-decoration: none; min-height: 5.5em;
+            -webkit-tap-highlight-color: transparent; }
+  a.karte:hover, a.karte:active { border-color: var(--akzent); }
+  a.karte b { display: block; font-size: 1.1em; color: var(--akzent); }
+  a.karte span { color: var(--text2); font-size: .92em; }
+  h2 { grid-column: 1 / -1; margin: .6em 0 0; font-size: 1em; color: var(--text2); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Physik-Simulationen</h1>
+  <p>Q1 Physik GK – antippen zum Öffnen</p>
+</header>
+<main>
+  <h2>Fadenpendel und Schaukel</h2>
+  <a class="karte" href="schaukel_stunde.html"><b>Schaukel als Fadenpendel</b><span>Zum Arbeitsblatt „Die Schaukel als Fadenpendel“</span></a>
+  <a class="karte" href="schaukel.html"><b>Papa, schubs mich an!</b><span>Schaukel-Simulation zur Klausuraufgabe</span></a>
+  <a class="karte" href="fadenpendel.html"><b>Fadenpendel</b><span>Schwingungsdauer, Energie, Vergleichspendel</span></a>
+  <a class="karte" href="hemmungspendel.html"><b>Hemmungspendel</b><span>Pendel nach Galilei</span></a>
+  <h2>Federpendel</h2>
+  <a class="karte" href="federpendel.html"><b>Federpendel</b><span>Schwingung einer Masse an der Feder</span></a>
+  <a class="karte" href="federkonstante.html"><b>Federkonstante</b><span>Hookesches Gesetz messen</span></a>
+  <h2>Weitere Schwingungen</h2>
+  <a class="karte" href="gekoppelte_fadenpendel.html"><b>Gekoppelte Fadenpendel</b><span>Energieübertragung zwischen Pendeln</span></a>
+  <a class="karte" href="gekoppelte_federpendel.html"><b>Gekoppelte Federpendel</b><span>Zwei gekoppelte Schwinger</span></a>
+  <a class="karte" href="gekoppelte_federpendel_reihe.html"><b>Federpendel in einer Reihe</b><span>Vom Schwinger zur Welle</span></a>
+  <a class="karte" href="erdtunnel.html"><b>Fall durch den Erdtunnel</b><span>Harmonische Schwingung durch die Erde</span></a>
+  <a class="karte" href="kippschwingung.html"><b>Kippschwingung</b><span>Kippschwingung am Überlauf</span></a>
+</main>
+</body>
+</html>

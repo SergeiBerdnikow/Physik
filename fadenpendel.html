@@ -1,0 +1,681 @@
+<meta charset="utf-8">
+<title>Fadenpendel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: Pendel links, Einstellungen und Schwingungsdauer rechts, darunter s(t), v(t), E(t) und Energiebalken */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --ink: #18222e; --muted: #5a6776; --line: #d3dae2; --grid: #e3e8ee;
+  --accent: #1f5c99; --scene: #f6f8fa; --steel: #6b7480; --bob: #c9d6e4; --hint: #eef4fb;
+  --scol: #2e7d32;   /* Auslenkung s (Bogen) */
+  --vcol: #c62828;   /* Geschwindigkeit */
+  --fcol: #1b3f73;   /* Kräfte */
+  --acol: #8a5a00;   /* Beschleunigung */
+  --e-pot: #1f77b4; --e-kin: #d95f02; --e-ges: #2b2b2b;
+  --ghost: rgba(31,92,153,.35);
+  --font: system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --panel: #19212a; --ink: #e4e9ef; --muted: #96a3b1; --line: #2c3743; --grid: #222b35;
+    --accent: #6aa8ec; --scene: #151c24; --steel: #9aa4b0; --bob: #34465a; --hint: #1c2a3a;
+    --scol: #66c46b; --vcol: #f07a62; --fcol: #8db8f0; --acol: #e3ad55;
+    --e-pot: #5aa9e6; --e-kin: #f28c3a; --e-ges: #c9d1da; --ghost: rgba(106,168,236,.38);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --panel: #19212a; --ink: #e4e9ef; --muted: #96a3b1; --line: #2c3743; --grid: #222b35;
+  --accent: #6aa8ec; --scene: #151c24; --steel: #9aa4b0; --bob: #34465a; --hint: #1c2a3a;
+  --scol: #66c46b; --vcol: #f07a62; --fcol: #8db8f0; --acol: #e3ad55;
+  --e-pot: #5aa9e6; --e-kin: #f28c3a; --e-ges: #c9d1da; --ghost: rgba(106,168,236,.38);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.45; margin: 0;
+       padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+body.gross { font-size: 19px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 20px 40px; display: flex; flex-direction: column; gap: 16px; }
+header { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
+header .titel { flex: 1 1 420px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.eyebrow { font-family: var(--mono); font-size: .8em; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-weight: 750; font-size: clamp(26px, 4vw, 36px); line-height: 1.1; margin: 0; text-wrap: balance; }
+.lead { margin: 0; color: var(--muted); max-width: 75ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.bottom { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 16px; align-items: stretch; }
+@media (max-width: 880px) { .grid, .bottom { grid-template-columns: minmax(0, 1fr); } }
+.col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
+.stage { padding: 0; overflow: hidden; }
+canvas { display: block; width: 100%; touch-action: none; }
+#scene { height: 430px; }
+body.gross #scene { height: 520px; }
+#graph { height: 400px; }
+#energy { height: 400px; }
+@media (max-width: 880px) { #scene { height: 360px; } #energy { height: 240px; } }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); align-items: center; }
+.toolbar .spacer { flex: 1; }
+button, select { font: 500 1em var(--font); color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+                 border-radius: 8px; padding: .45em .85em; min-height: 2.5em; cursor: pointer; }
+button:hover:not(:disabled), select:hover { border-color: var(--muted); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); min-width: 6.5em; font-weight: 650; }
+button.aktiv { outline: 3px solid var(--accent); outline-offset: 1px; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h2 { font-size: .85em; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+.ctrl { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline; margin-bottom: 12px; }
+.ctrl label { font-weight: 550; }
+.ctrl output { font-family: var(--mono); font-size: .93em; font-variant-numeric: tabular-nums; }
+.ctrl input[type=range] { grid-column: 1 / -1; width: 100%; height: 2em; accent-color: var(--accent); }
+.ctrl select { grid-column: 1 / -1; width: 100%; }
+.quick { display: flex; flex-wrap: wrap; gap: 8px; }
+.quick button { font-size: .9em; }
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px 14px; }
+.checks label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.checks input { width: 1.15em; height: 1.15em; }
+.sw { display: inline-block; width: 18px; height: 0; border-top: 3px solid; border-radius: 2px; flex: none; }
+.formula { font-family: var(--mono); font-size: .9em; background: var(--bg); border-radius: 6px; padding: 9px 11px; overflow-x: auto; white-space: nowrap; }
+.formula b { color: var(--accent); font-weight: 600; }
+.compare { margin-top: 10px; min-height: 1.5em; }
+.compare strong { font-family: var(--mono); font-weight: 550; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+td { text-align: right; padding: 5px 4px; border-bottom: 1px solid var(--line); }
+td:first-child { text-align: left; }
+td.num { font-family: var(--mono); white-space: nowrap; font-size: .93em; }
+td .sym { font-family: var(--mono); color: var(--muted); font-size: .88em; }
+.note { font-size: .85em; color: var(--muted); margin: 8px 0 0; }
+#schritte { display: none; padding: 10px 12px; border-left: 5px solid var(--accent); background: var(--hint); border-radius: 6px; }
+#schritte.an { display: block; }
+#schrittText { font-size: 1.08em; margin: .3em 0 .2em; }
+.zeile { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.auftraege ol { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 10px; }
+.auftraege details { margin-top: 4px; }
+.auftraege details summary { font-weight: 500; color: var(--accent); }
+.auftraege details p { margin: 4px 0 0; background: var(--hint); border-radius: 6px; padding: 6px 10px; }
+.merk ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 4px; }
+details summary { cursor: pointer; font-weight: 600; }
+kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 .3em; font-size: .85em; background: var(--bg); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="titel">
+      <span class="eyebrow">Mechanische Schwingungen · Q1 Physik</span>
+      <h1>Fadenpendel</h1>
+      <p class="lead">Eine kleine Kugel der Masse <i>m</i> hängt an einem Faden der Länge <i>l</i> und schwingt ohne Reibung. Beobachte, wie sich Lageenergie und Bewegungsenergie ineinander umwandeln und wovon die Schwingungsdauer abhängt.</p>
+    </div>
+    <div class="quick">
+      <button id="btnGross" title="Große Schrift für den Beamer (G)">Beamer-Ansicht</button>
+      <button id="btnVoll" title="Vollbild (F)">Vollbild</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <div class="card stage">
+        <canvas id="scene" aria-label="Fadenpendel mit Höhe und Pfeilen"></canvas>
+        <div class="toolbar">
+          <button class="primary" id="play" title="Start/Pause (Leertaste)">❚❚ Pause</button>
+          <button id="restart" title="Neu starten (R)">↺ Neu starten</button>
+          <button id="stepBtn" title="Eine Achtelperiode weiter (→)">⅛ T weiter</button>
+          <span class="spacer"></span>
+          <label for="speed" class="note" style="margin:0;display:flex;gap:6px;align-items:center">Tempo
+            <select id="speed">
+              <option value="1">1×</option>
+              <option value="0.5">0,5×</option>
+              <option value="0.25">0,25×</option>
+              <option value="0.1">0,1×</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="schritte">
+        <div class="zeile">
+          <b id="schrittNr"></b>
+          <span class="quick"><button id="btnZurueck">◀ zurück</button><button id="btnWeiter" class="primary">weiter ▶</button><button id="btnSchrittEnde">beenden</button></span>
+        </div>
+        <div id="schrittText"></div>
+      </div>
+      <div class="card">
+        <h2>In der Szene anzeigen</h2>
+        <div class="checks">
+          <label><input type="checkbox" id="showS" checked> <span class="sw" style="border-color:var(--scol)"></span> Auslenkung <i>s</i> (Bogen)</label>
+          <label><input type="checkbox" id="showV" checked> <span class="sw" style="border-color:var(--vcol)"></span> Geschwindigkeit <i>v</i></label>
+          <label><input type="checkbox" id="showH" checked> <span class="sw" style="border-color:var(--e-pot)"></span> Höhe <i>h</i></label>
+          <label><input type="checkbox" id="showF"> <span class="sw" style="border-color:var(--fcol)"></span> Kräfte zerlegen (F_G Gewichtskraft, F_R Rückstellkraft)</label>
+          <label><input type="checkbox" id="showVal" checked> Zahlenwerte an den Pfeilen</label>
+          <label><input type="checkbox" id="showTrace"> Bahn der Kugel</label>
+        </div>
+        <div class="ctrl" style="margin:12px 0 0">
+          <label for="ghost">Vergleichspendel</label><span></span>
+          <select id="ghost">
+            <option value="aus">aus</option>
+            <option value="halb">gleiches Pendel, halbe Amplitude</option>
+            <option value="viertel">Faden nur ein Viertel so lang</option>
+            <option value="harm">ideale Sinusschwingung (Kleinwinkelnäherung)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card">
+        <h2>Einstellungen</h2>
+        <div class="ctrl"><label for="l">Fadenlänge <i>l</i></label><output id="lOut"></output><input type="range" id="l" min="0.1" max="2.5" step="0.01" value="1"></div>
+        <div class="ctrl"><label for="m">Masse <i>m</i></label><output id="mOut"></output><input type="range" id="m" min="0.05" max="1" step="0.01" value="0.2"></div>
+        <div class="ctrl"><label for="A">größter Winkel <i>φ</i><sub>max</sub></label><output id="AOut"></output><input type="range" id="A" min="1" max="60" step="0.1" value="15"></div>
+        <div class="ctrl"><label for="ort">Ort (Fallbeschleunigung <i>g</i>)</label><span></span>
+          <select id="ort">
+            <option value="9.81">Erde: g = 9,81 m/s²</option>
+            <option value="1.62">Mond: g = 1,62 m/s²</option>
+            <option value="3.71">Mars: g = 3,71 m/s²</option>
+            <option value="24.79">Jupiter: g = 24,79 m/s²</option>
+          </select></div>
+        <div class="ctrl"><label for="start">Start</label><span></span>
+          <select id="start">
+            <option value="umkehr">im rechten Umkehrpunkt loslassen</option>
+            <option value="ruhe">in der Ruhelage nach rechts anstoßen</option>
+          </select></div>
+        <div class="quick">
+          <button id="l4">l × 4</button>
+          <button id="m2">m × 2</button>
+          <button id="A2">Winkel × 2</button>
+          <button id="mond">auf den Mond</button>
+          <button id="ab">Arbeitsblatt</button>
+          <button id="defaults">Startwerte</button>
+        </div>
+        <div class="compare" id="compare" aria-live="polite"></div>
+      </div>
+      <div class="card">
+        <h2>Schwingungsdauer</h2>
+        <div class="formula" id="formula"></div>
+        <table style="margin-top:8px">
+          <tr><td>gemessen (Umkehrpunkt bis Umkehrpunkt)</td><td class="num" id="Tmeas">–</td></tr>
+          <tr><td>Abweichung von der Formel</td><td class="num" id="Tdev">–</td></tr>
+          <tr><td>Frequenz <span class="sym">f = 1/T</span></td><td class="num" id="fOut"></td></tr>
+          <tr><td>Verhältnis <span class="sym">l/g</span></td><td class="num" id="lgOut"></td></tr>
+        </table>
+        <p class="note">Die Formel gilt für kleine Winkel (bis etwa 10°). Die Simulation rechnet genau, darum wird das Pendel bei großen Winkeln etwas langsamer als die Formel sagt.</p>
+      </div>
+      <div class="card">
+        <h2>Messwerte</h2>
+        <table>
+          <tr><td>Zeit <span class="sym">t</span></td><td class="num" id="tNow"></td><td class="num"></td></tr>
+          <tr><td>Winkel <span class="sym">φ</span></td><td class="num" id="phiNow"></td><td class="num" id="phiMax"></td></tr>
+          <tr><td>Auslenkung <span class="sym">s</span></td><td class="num" id="sNow"></td><td class="num" id="sMax"></td></tr>
+          <tr><td>Geschwindigkeit <span class="sym">v</span></td><td class="num" id="vNow"></td><td class="num" id="vMax"></td></tr>
+          <tr><td>Höhe <span class="sym">h</span></td><td class="num" id="hNow"></td><td class="num" id="hMax"></td></tr>
+        </table>
+        <p class="note">Rechte Spalte: Höchstwerte. <i>s</i> wird entlang des Bogens gemessen, rechts ist positiv. <i>h</i> ist die Höhe über dem tiefsten Punkt.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="card">
+      <h2>Zeit-Diagramme</h2>
+      <canvas id="graph" aria-label="s(t), v(t) und Energien über der Zeit"></canvas>
+      <div class="checks" style="margin-top:8px">
+        <label><input type="checkbox" id="gS" checked> <span class="sw" style="border-color:var(--scol)"></span> <i>s</i>(<i>t</i>)</label>
+        <label><input type="checkbox" id="gV" checked> <span class="sw" style="border-color:var(--vcol)"></span> <i>v</i>(<i>t</i>)</label>
+        <label><input type="checkbox" id="gA"> <span class="sw" style="border-color:var(--acol)"></span> <i>a</i>(<i>t</i>)</label>
+        <label><input type="checkbox" id="gE" checked> <span class="sw" style="border-color:var(--e-pot)"></span> Energien <i>E</i>(<i>t</i>)</label>
+      </div>
+      <p class="note">Senkrechte Linien markieren Vielfache der gemessenen Schwingungsdauer <i>T</i>. Im Energie-Diagramm: <b style="color:var(--e-pot)">E<sub>Lage</sub></b>, <b style="color:var(--e-kin)">E<sub>kin</sub></b>, <b style="color:var(--e-ges)">E<sub>ges</sub></b>. Die Energien schwingen doppelt so schnell wie <i>s</i>.</p>
+    </div>
+    <div class="card">
+      <h2>Energie</h2>
+      <canvas id="energy" aria-label="Energiebalken"></canvas>
+    </div>
+  </div>
+
+  <div class="card auftraege">
+    <h2>Beobachte selbst</h2>
+    <ol>
+      <li>Drücke <b>Startwerte</b> und beobachte die Energiebalken. Wo ist die Kugel, wenn der orange Balken (<i>E</i><sub>kin</sub>) am größten ist? Wo, wenn der blaue Balken (<i>E</i><sub>Lage</sub>) am größten ist?
+        <details><summary>Lösung anzeigen</summary><p><i>E</i><sub>kin</sub> ist am größten im tiefsten Punkt (Ruhelage), dort ist die Kugel am schnellsten. <i>E</i><sub>Lage</sub> ist am größten in den Umkehrpunkten, dort ist die Kugel am höchsten und steht kurz still. Der Balken <i>E</i><sub>ges</sub> (Gesamtenergie) bleibt immer gleich.</p></details></li>
+      <li>Drücke <b>m × 2</b>. Was passiert mit der Schwingungsdauer? Lies den Satz unter den Knöpfen.
+        <details><summary>Lösung anzeigen</summary><p>Die Schwingungsdauer bleibt gleich. Die Masse spielt beim Fadenpendel keine Rolle.</p></details></li>
+      <li>Drücke <b>Startwerte</b> und dann <b>l × 4</b>. Wie ändert sich <i>T</i>?
+        <details><summary>Lösung anzeigen</summary><p><i>T</i> wird doppelt so groß (das 2-Fache), denn √4 = 2.</p></details></li>
+      <li>Drücke <b>Startwerte</b> und dann <b>auf den Mond</b>. Schwingt das Pendel schneller oder langsamer? Warum?
+        <details><summary>Lösung anzeigen</summary><p>Langsamer: Auf dem Mond ist <i>g</i> kleiner, die Kugel wird schwächer zurückgezogen. <i>T</i> wird etwa 2,5-mal so groß.</p></details></li>
+      <li>Schalte <b>Kräfte zerlegen</b> ein und drücke Pause. Ziehe die Kugel zur Seite. Welcher Pfeil zieht die Kugel zurück zur Ruhelage?
+        <details><summary>Lösung anzeigen</summary><p>Der Pfeil <i>F</i><sub>R</sub> (Rückstellkraft). Er ist ein Teil der Gewichtskraft <i>F</i><sub>G</sub> und zeigt immer entlang der Bahn zur Ruhelage. In der Ruhelage ist er null.</p></details></li>
+    </ol>
+  </div>
+
+  <div class="card merk">
+    <h2>Das Wichtigste</h2>
+    <ul>
+      <li>Im Umkehrpunkt ist die Kugel um <i>h</i> angehoben und steht still: Die ganze Energie ist <b style="color:var(--e-pot)">Lageenergie</b> <i>E</i><sub>Lage</sub> = <i>m</i> · <i>g</i> · <i>h</i>.</li>
+      <li>Im tiefsten Punkt (Ruhelage) ist <i>h</i> = 0 und die Kugel am schnellsten: Die ganze Energie ist <b style="color:var(--e-kin)">Bewegungsenergie</b> <i>E</i><sub>kin</sub> = ½ · <i>m</i> · <i>v</i>². Ohne Reibung bleibt die Gesamtenergie gleich, also gilt <i>v̂</i> = √(2 · <i>g</i> · <i>h</i>).</li>
+      <li>Die Rückstellkraft ist der Teil der Gewichtskraft entlang der Bahn: <i>F</i> = −<i>m</i> · <i>g</i> · sin <i>φ</i>. Für kleine Winkel ist sie fast proportional zu <i>s</i>, darum schwingt das Pendel (fast) harmonisch: <i>s</i>(<i>t</i>) = <i>ŝ</i> · sin(<i>ω t</i>) bzw. <i>ŝ</i> · cos(<i>ω t</i>) mit <i>ω</i> = √(<i>g</i>/<i>l</i>).</li>
+      <li><i>T</i> = 2π · √(<i>l</i>/<i>g</i>) hängt nur vom Verhältnis <i>l</i>/<i>g</i> ab, nicht von der Masse und (bei kleinen Winkeln) nicht von der Amplitude. Vierfache Länge: doppelte Schwingungsdauer.</li>
+    </ul>
+    <details style="margin-top:10px">
+      <summary>Bedienung und Rechnung</summary>
+      <p class="note">Tastatur: <kbd>Leertaste</kbd> Start/Pause · <kbd>R</kbd> neu starten · <kbd>→</kbd> ⅛ T weiter · <kbd>G</kbd> Beamer-Ansicht · <kbd>F</kbd> Vollbild. Im Pausenzustand lässt sich die Kugel mit Maus oder Finger auslenken.</p>
+      <p class="note">Die Simulation löst <i>φ</i>'' = −(<i>g</i>/<i>l</i>) · sin <i>φ</i> mit dem Velocity-Verlet-Verfahren (Zeitschritt 0,5 ms), also ohne Kleinwinkelnäherung. Die Kugel wird als Massenpunkt gerechnet, der Faden als masselos.</p>
+      <div class="quick"><button id="btnSchrittmodus">Schritt für Schritt besprechen</button><button id="btnCSV">Messwerte speichern (CSV)</button></div>
+    </details>
+  </div>
+</div>
+
+<script>
+"use strict";
+(() => {
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const big = () => document.body.classList.contains("gross");
+const fs = px => Math.round(px * (big() ? 1.25 : 1));
+const nf = (v, d) => (Math.abs(v) < 0.5 * Math.pow(10, -d) ? 0 : v).toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
+const DEG = Math.PI / 180;
+
+const DEF = { l: 1.0, m: 0.2, A: 15, g: 9.81, start: "umkehr" };
+const S = { l: DEF.l, m: DEF.m, A: DEF.A * DEG, g: DEF.g, start: DEF.start,
+            phi: 0, w: 0, t: 0, gphi: 0, gw: 0, playing: true, speed: 1,
+            hist: [], trace: [], lastRev: null, Tmeas: null, prevT: null, dragBase: null };
+if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) S.playing = false;
+
+const Tformel = () => 2 * Math.PI * Math.sqrt(S.l / S.g);
+// genaue Periode (ohne Kleinwinkelnäherung) über das arithmetisch-geometrische Mittel
+function Tgenau(l, A) { let a = 1, b = Math.cos(A / 2); for (let i = 0; i < 12; i++) [a, b] = [(a + b) / 2, Math.sqrt(a * b)]; return 2 * Math.PI * Math.sqrt(l / S.g) / a; }
+const ghostL = () => $("ghost").value === "viertel" ? S.l / 4 : S.l;
+const ghostA = () => $("ghost").value === "halb" ? S.A / 2 : S.A;
+
+// Anfangsgeschwindigkeit in der Ruhelage, damit der größte Winkel genau A ist
+const w0 = (l, A) => Math.sqrt(2 * S.g / l * (1 - Math.cos(A)));
+function anfang(l, A) { return S.start === "umkehr" ? [A, 0] : [0, w0(l, A)]; }
+
+function restart() {
+  [S.phi, S.w] = anfang(S.l, S.A);
+  [S.gphi, S.gw] = anfang(ghostL(), ghostA());
+  S.t = 0; S.hist = []; S.trace = []; S.lastRev = S.start === "umkehr" ? 0 : null; S.Tmeas = null;
+  record(); updateText();
+}
+
+// Velocity-Verlet für φ'' = −(g/l)·sin φ
+function verlet(phi, w, l, h) {
+  const k = S.g / l, a = -k * Math.sin(phi);
+  const p1 = phi + w * h + 0.5 * a * h * h;
+  const w1 = w + 0.5 * (a - k * Math.sin(p1)) * h;
+  return [p1, w1];
+}
+const DT = 0.0005;
+let recAcc = 0;
+function step(dt) {
+  const n = Math.max(1, Math.round(dt / DT)), h = dt / n;
+  for (let i = 0; i < n; i++) {
+    const [p1, w1] = verlet(S.phi, S.w, S.l, h);
+    if (S.w > 0 && w1 <= 0) {           // rechter Umkehrpunkt
+      const tc = S.t + h * S.w / (S.w - w1);
+      if (S.lastRev !== null) S.Tmeas = tc - S.lastRev;
+      S.lastRev = tc;
+    }
+    S.phi = p1; S.w = w1; S.t += h;
+    if ($("ghost").value === "harm") {
+      const om = Math.sqrt(S.g / S.l);
+      S.gphi = S.start === "umkehr" ? S.A * Math.cos(om * S.t) : S.A * Math.sin(om * S.t);
+    } else [S.gphi, S.gw] = verlet(S.gphi, S.gw, ghostL(), h);
+    recAcc += h;
+    if (recAcc >= 0.01) { recAcc = 0; record(); }
+  }
+}
+function energies(phi, w) {
+  const hh = S.l * (1 - Math.cos(phi)), v = S.l * w;
+  return { h: hh, v, Ep: S.m * S.g * hh, Ek: 0.5 * S.m * v * v };
+}
+const Eges = () => S.m * S.g * S.l * (1 - Math.cos(S.A));
+function record() {
+  const e = energies(S.phi, S.w);
+  S.hist.push({ t: S.t, s: S.l * S.phi, v: e.v, a: -S.g * Math.sin(S.phi), Ep: e.Ep, Ek: e.Ek });
+  const tw = windowLen();
+  while (S.hist.length > 2 && S.hist[1].t < S.t - tw) S.hist.shift();
+  if ($("showTrace").checked) { S.trace.push(S.phi); if (S.trace.length > 400) S.trace.shift(); }
+}
+function windowLen() { return Math.max(4, Math.ceil(2.5 * Tgenau(S.l, S.A))); }
+
+// ---------- Regler ----------
+const ORT = { "9.81": "Erde", "1.62": "Mond", "3.71": "Mars", "24.79": "Jupiter" };
+function syncInputs() {
+  $("l").value = S.l; $("m").value = S.m; $("A").value = (S.A / DEG).toFixed(1); $("ort").value = String(S.g); $("start").value = S.start;
+  $("lOut").textContent = nf(S.l, 2) + " m";
+  $("mOut").textContent = nf(S.m * 1000, 0) + " g";
+  $("AOut").textContent = nf(S.A / DEG, 1) + "°  (ŝ = " + nf(S.l * S.A * 100, 1) + " cm)";
+  $("l4").disabled = S.l * 4 > 2.5001;
+  $("m2").disabled = S.m * 2 > 1.0001;
+  $("A2").disabled = S.A * 2 > 60.001 * DEG;
+  $("mond").disabled = S.g === 1.62;
+}
+function showCompare() {
+  const el = $("compare");
+  if (S.prevT === null) { el.textContent = "Ändere eine Größe und vergleiche die Schwingungsdauer."; return; }
+  const T = Tgenau(S.l, S.A), r = T / S.prevT;
+  const txt = Math.abs(r - 1) < 0.005 ? "T bleibt (fast) gleich" : "T ist jetzt das " + nf(r, 2) + "-Fache";
+  el.innerHTML = "Vorher <strong>T = " + nf(S.prevT, 2) + " s</strong>, jetzt <strong>T = " + nf(T, 2) + " s</strong>. " + txt + ".";
+}
+function setParam(fn) {
+  S.prevT = Tgenau(S.l, S.A); fn(); syncInputs(); restart(); showCompare();
+}
+[["l", v => S.l = v], ["m", v => S.m = v], ["A", v => S.A = v * DEG]].forEach(([k, set]) => {
+  const el = $(k);
+  el.addEventListener("input", () => {
+    if (S.dragBase === null) S.dragBase = Tgenau(S.l, S.A);
+    set(parseFloat(el.value)); S.prevT = S.dragBase; syncInputs(); restart(); showCompare();
+  });
+  el.addEventListener("change", () => { S.dragBase = null; });
+});
+$("ort").onchange = () => setParam(() => { S.g = parseFloat($("ort").value); });
+$("start").onchange = () => { S.start = $("start").value; restart(); };
+$("ghost").onchange = () => restart();
+$("l4").onclick = () => setParam(() => { S.l = Math.round(S.l * 400) / 100; });
+$("m2").onclick = () => setParam(() => { S.m = Math.round(S.m * 200) / 100; });
+$("A2").onclick = () => setParam(() => { S.A = S.A * 2; });
+$("mond").onclick = () => setParam(() => { S.g = 1.62; });
+$("ab").onclick = () => { S.prevT = null; S.l = 1.0; S.m = 0.2; S.A = 0.1; S.g = 9.81; S.start = "ruhe"; syncInputs(); restart(); showCompare(); };
+$("defaults").onclick = () => { S.prevT = null; Object.assign(S, { l: DEF.l, m: DEF.m, A: DEF.A * DEG, g: DEF.g, start: DEF.start }); $("ghost").value = "aus"; syncInputs(); restart(); showCompare(); };
+
+function setPlaying(on) { S.playing = on; $("play").textContent = on ? "❚❚ Pause" : "▶ Start"; }
+$("play").onclick = () => setPlaying(!S.playing);
+$("restart").onclick = () => { schritte.aus(); restart(); };
+$("stepBtn").onclick = () => { setPlaying(false); step(Tgenau(S.l, S.A) / 8); updateText(); };
+$("speed").onchange = e => { S.speed = parseFloat(e.target.value); };
+$("btnGross").onclick = () => { document.body.classList.toggle("gross"); $("btnGross").classList.toggle("aktiv"); };
+$("btnVoll").onclick = () => {
+  try { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {}
+};
+$("showTrace").addEventListener("change", () => { S.trace = []; });
+$("btnCSV").onclick = () => {
+  const rows = S.hist.map(p => [p.t, p.s, p.v, p.Ep, p.Ek, p.Ep + p.Ek].map(w => w.toFixed(5).replace(".", ",")).join(";"));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["t in s;s in m;v in m/s;E_Lage in J;E_kin in J;E_ges in J\n" + rows.join("\n")], { type: "text/csv" }));
+  a.download = "fadenpendel_messwerte.csv"; document.body.appendChild(a); a.click(); a.remove();
+};
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT" || (e.target.tagName === "INPUT" && e.key !== " ")) return;
+  const k = e.key.toLowerCase();
+  if (k === " ") { e.preventDefault(); setPlaying(!S.playing); }
+  else if (k === "r") $("restart").click();
+  else if (k === "arrowright") $("stepBtn").click();
+  else if (k === "g") $("btnGross").click();
+  else if (k === "f") $("btnVoll").click();
+});
+
+// ---------- Texte ----------
+function updateText() {
+  const T = Tformel(), Tg = Tgenau(S.l, S.A);
+  $("formula").innerHTML = "T = 2π·√(l/g) = 2π·√(" + nf(S.l, 2) + " m / " + nf(S.g, 2) + " m/s²) = <b>" + nf(T, 2) + " s</b>";
+  $("Tmeas").textContent = S.Tmeas === null ? "läuft …" : nf(S.Tmeas, 3) + " s";
+  $("Tdev").textContent = S.Tmeas === null ? "–" : "+" + nf((S.Tmeas / T - 1) * 100, 1) + " %";
+  $("fOut").textContent = nf(1 / Tg, 2) + " Hz";
+  $("lgOut").textContent = nf(S.l / S.g, 3) + " s²";
+  const e = energies(S.phi, S.w), hm = S.l * (1 - Math.cos(S.A));
+  $("tNow").textContent = nf(S.t, 2) + " s";
+  $("phiNow").textContent = nf(S.phi / DEG, 1) + "°";
+  $("phiMax").textContent = "φmax = " + nf(S.A / DEG, 1) + "°";
+  $("sNow").textContent = nf(S.l * S.phi * 100, 1) + " cm";
+  $("sMax").textContent = "ŝ = " + nf(S.l * S.A * 100, 1) + " cm";
+  $("vNow").textContent = nf(e.v, 2) + " m/s";
+  $("vMax").textContent = "v̂ = " + nf(Math.sqrt(2 * S.g * hm), 2) + " m/s";
+  $("hNow").textContent = hNice(e.h);
+  $("hMax").textContent = "ĥ = " + hNice(hm);
+}
+const hNice = h => h < 0.1 ? nf(h * 1000, 1) + " mm" : nf(h * 100, 1) + " cm";
+const eUnit = E => Eges() < 1 ? [1000, "mJ"] : [1, "J"];
+
+// ---------- Zeichnen ----------
+function fit(cv) {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return [c, r.width, r.height];
+}
+function arrow(c, x0, y0, x1, y1, col, lw = 3.2, dash = false) {
+  const L = Math.hypot(x1 - x0, y1 - y0); if (L < 2) return;
+  const ang = Math.atan2(y1 - y0, x1 - x0), s = Math.min(12, L * 0.6);
+  c.save(); c.strokeStyle = c.fillStyle = col; c.lineWidth = lw; c.lineCap = "round";
+  if (dash) c.setLineDash([6, 4]);
+  c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1 - 0.7 * s * Math.cos(ang), y1 - 0.7 * s * Math.sin(ang)); c.stroke(); c.setLineDash([]);
+  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x1 - s * Math.cos(ang - 0.42), y1 - s * Math.sin(ang - 0.42));
+  c.lineTo(x1 - s * Math.cos(ang + 0.42), y1 - s * Math.sin(ang + 0.42)); c.closePath(); c.fill(); c.restore();
+}
+function label(c, txt, x, y, col, { align = "center", bold = false, size = 13 } = {}) {
+  c.save(); c.font = (bold ? "650 " : "500 ") + fs(size) + "px " + css("--font"); c.textAlign = align; c.textBaseline = "middle";
+  const w = c.measureText(txt).width, x0 = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
+  c.fillStyle = css("--scene"); c.globalAlpha = 0.85; c.fillRect(x0 - 3, y - fs(size) * 0.65, w + 6, fs(size) * 1.3); c.globalAlpha = 1;
+  c.fillStyle = col; c.fillText(txt, x, y); c.restore();
+}
+
+let geo = null;
+function drawScene() {
+  const [c, W, H] = fit($("scene"));
+  c.fillStyle = css("--scene"); c.fillRect(0, 0, W, H);
+  const ink = css("--ink"), muted = css("--muted"), steel = css("--steel");
+  const top = 34, Lref = Math.max(S.l, 1.0);
+  const sinA = Math.max(Math.sin(Math.min(S.A, Math.PI / 2)), 0.35);
+  const sc = Math.min((H - top - 96) / Lref, (W / 2 - 50) / (Lref * sinA)); // Pixel pro Meter
+  const px = W / 2, py = top, L = S.l * sc;
+  const bobR = 9 + 13 * Math.cbrt(S.m);                                         // Kugelgröße zeigt die Masse
+  geo = { px, py, sc, bobR };
+  // Decke
+  c.fillStyle = steel; c.fillRect(px - 80, top - 14, 160, 10);
+  c.strokeStyle = steel; c.lineWidth = 1.2;
+  for (let x = px - 76; x < px + 80; x += 10) { c.beginPath(); c.moveTo(x, top - 14); c.lineTo(x + 7, top - 22); c.stroke(); }
+  // Ruhelage und Bahnbogen
+  c.strokeStyle = muted; c.lineWidth = 1; c.setLineDash([5, 4]);
+  c.beginPath(); c.moveTo(px, py); c.lineTo(px, py + L + bobR + 18); c.stroke();
+  c.setLineDash([2, 4]); c.beginPath(); c.arc(px, py, L, Math.PI / 2 - S.A * 1.08, Math.PI / 2 + S.A * 1.08); c.stroke(); c.setLineDash([]);
+  // Umkehrpunkte
+  [-1, 1].forEach(k => { const x = px + k * L * Math.sin(S.A), y = py + L * Math.cos(S.A);
+    c.strokeStyle = muted; c.lineWidth = 1; c.setLineDash([2, 3]); c.beginPath(); c.moveTo(px, py); c.lineTo(x, y); c.stroke(); c.setLineDash([]); });
+  // Maßstab
+  const unit = S.l >= 0.5 ? 0.5 : 0.1, ul = unit * sc;
+  c.strokeStyle = muted; c.lineWidth = 2; c.beginPath(); c.moveTo(14, H - 16); c.lineTo(14 + ul, H - 16); c.moveTo(14, H - 21); c.lineTo(14, H - 11); c.moveTo(14 + ul, H - 21); c.lineTo(14 + ul, H - 11); c.stroke();
+  c.fillStyle = muted; c.font = "500 " + fs(12) + "px " + css("--font"); c.textAlign = "left"; c.textBaseline = "bottom";
+  c.fillText(unit === 0.5 ? "50 cm" : "10 cm", 14, H - 22);
+
+  // Bahnspur
+  if ($("showTrace").checked && S.trace.length > 1) {
+    c.strokeStyle = css("--accent"); c.globalAlpha = 0.35; c.lineWidth = 2; c.beginPath();
+    S.trace.forEach((p, i) => { const x = px + L * Math.sin(p), y = py + L * Math.cos(p); i ? c.lineTo(x, y) : c.moveTo(x, y); });
+    c.stroke(); c.globalAlpha = 1;
+  }
+  // Vergleichspendel
+  const gv = $("ghost").value;
+  if (gv !== "aus") {
+    const gl = ghostL() * sc, gx = px + gl * Math.sin(S.gphi), gy = py + gl * Math.cos(S.gphi);
+    c.strokeStyle = css("--ghost"); c.lineWidth = 1.6; c.beginPath(); c.moveTo(px, py); c.lineTo(gx, gy); c.stroke();
+    c.fillStyle = css("--ghost"); c.beginPath(); c.arc(gx, gy, bobR * 0.8, 0, 7); c.fill();
+  }
+
+  const bx = px + L * Math.sin(S.phi), by = py + L * Math.cos(S.phi), low = py + L;
+  const e = energies(S.phi, S.w), showVal = $("showVal").checked;
+  // Höhe h
+  if ($("showH").checked) {
+    const ep = css("--e-pot");
+    c.strokeStyle = ep; c.lineWidth = 1.2; c.setLineDash([6, 4]);
+    c.beginPath(); c.moveTo(px - L * 0.9 - 20, low + bobR); c.lineTo(px + L * 0.9 + 20, low + bobR); c.stroke(); c.setLineDash([]);
+    label(c, "h = 0", px + Math.min(L * 0.9, W / 2 - 60) + 10, low + bobR + 12, ep, { align: "left", size: 12 });
+    const hp = e.h * sc;
+    if (hp > 3) {
+      const hx = bx + Math.sign(S.phi || 1) * (bobR + 16);
+      c.strokeStyle = ep; c.lineWidth = 1; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(bx, by + bobR); c.lineTo(hx + Math.sign(S.phi) * 4, by + bobR); c.stroke(); c.setLineDash([]);
+      c.lineWidth = 2.4; c.beginPath(); c.moveTo(hx, low + bobR); c.lineTo(hx, by + bobR); c.stroke();
+      c.beginPath(); c.moveTo(hx - 5, by + bobR); c.lineTo(hx + 5, by + bobR); c.moveTo(hx - 5, low + bobR); c.lineTo(hx + 5, low + bobR); c.stroke();
+      label(c, showVal ? "h = " + hNice(e.h) : "h", hx + Math.sign(S.phi) * 8, hp < 34 ? by + bobR - 18 : (low + by) / 2 + bobR, ep, { align: S.phi > 0 ? "left" : "right", bold: true });
+    }
+  }
+  // Auslenkung s (Bogen)
+  if ($("showS").checked && Math.abs(S.phi) > 0.003) {
+    const r = L - bobR - 12, a0 = Math.PI / 2, a1 = Math.PI / 2 - S.phi;
+    c.strokeStyle = css("--scol"); c.lineWidth = 3; c.beginPath(); c.arc(px, py, r, Math.min(a0, a1), Math.max(a0, a1)); c.stroke();
+    const ex = px + r * Math.cos(a1), ey = py + r * Math.sin(a1), tx = -Math.sign(S.phi) * Math.sin(a1), ty = Math.sign(S.phi) * Math.cos(a1);
+    arrow(c, ex - tx * 10, ey - ty * 10, ex + tx * 0.5, ey + ty * 0.5, css("--scol"), 3);
+    const lr = r - 22, la = (a0 + a1) / 2;
+    label(c, showVal ? "s = " + nf(S.l * S.phi * 100, 1) + " cm" : "s", px + lr * Math.cos(la), py + lr * Math.sin(la), css("--scol"), { bold: true });
+  }
+  // Winkel φ
+  if (Math.abs(S.phi) > 0.02) {
+    const r = Math.min(46, L * 0.25);
+    c.strokeStyle = muted; c.lineWidth = 1.4; c.beginPath(); c.arc(px, py, r, Math.min(Math.PI / 2, Math.PI / 2 - S.phi), Math.max(Math.PI / 2, Math.PI / 2 - S.phi)); c.stroke();
+    const la = Math.PI / 2 - S.phi / 2;
+    label(c, "φ", px + (r + 12) * Math.cos(la), py + (r + 12) * Math.sin(la), muted, { size: 14 });
+  }
+  // Faden und Kugel
+  c.strokeStyle = ink; c.lineWidth = 1.8; c.beginPath(); c.moveTo(px, py); c.lineTo(bx, by); c.stroke();
+  c.fillStyle = ink; c.beginPath(); c.arc(px, py, 3.5, 0, 7); c.fill();
+  c.fillStyle = css("--bob"); c.strokeStyle = ink; c.lineWidth = 1.6; c.beginPath(); c.arc(bx, by, bobR, 0, 7); c.fill(); c.stroke();
+  c.fillStyle = ink; c.font = "650 " + fs(12) + "px " + css("--font"); c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("m", bx, by);
+  geo.bx = bx; geo.by = by;
+
+  // Tangente (Richtung wachsender φ)
+  const tx = Math.cos(S.phi), ty = -Math.sin(S.phi);
+  // Kräfte
+  if ($("showF").checked) {
+    const fsc = 55 / (S.m * S.g) * Math.min(1, 0.9 + 0 * S.m);   // Gewichtskraft immer 55 px lang
+    const FG = S.m * S.g, Ft = -FG * Math.sin(S.phi), Fr = FG * Math.cos(S.phi), fc = css("--fcol");
+    arrow(c, bx, by, bx, by + FG * fsc, fc, 3);
+    label(c, showVal ? "F_G = " + nf(FG, 2) + " N" : "F_G", bx + 10, by + FG * fsc + 4, fc, { align: "left", bold: true });
+    // Komponenten
+    const rx = Math.sin(S.phi), ry = Math.cos(S.phi);
+    arrow(c, bx, by, bx + rx * Fr * fsc, by + ry * Fr * fsc, fc, 2, true);
+    if (Math.abs(Ft * fsc) > 3) {
+      arrow(c, bx, by, bx + tx * Ft * fsc, by + ty * Ft * fsc, css("--acol"), 3.4);
+      c.strokeStyle = fc; c.globalAlpha = .5; c.lineWidth = 1; c.setLineDash([2, 3]); c.beginPath();
+      c.moveTo(bx + tx * Ft * fsc, by + ty * Ft * fsc); c.lineTo(bx, by + FG * fsc); c.lineTo(bx + rx * Fr * fsc, by + ry * Fr * fsc); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+      label(c, showVal ? "F_R = " + nf(Math.abs(Ft), 2) + " N" : "F_R", bx + tx * Ft * fsc + (Ft * tx < 0 ? -8 : 8), by + ty * Ft * fsc - 10, css("--acol"), { align: Ft * tx < 0 ? "right" : "left", bold: true });
+    } else label(c, "F_R = 0", bx - bobR - 8, by + 26, css("--acol"), { align: "right", bold: true });
+  }
+  // Geschwindigkeit
+  if ($("showV").checked) {
+    const vsc = 110 / Math.max(0.15, Math.sqrt(2 * S.g * S.l * (1 - Math.cos(S.A)))) * Math.min(1, 0.4 + Math.sqrt(2 * S.g * S.l * (1 - Math.cos(S.A))));
+    const vx = tx * e.v * vsc, vy = ty * e.v * vsc;
+    const off = bobR + 4, ox = bx - Math.sin(S.phi) * off, oy = by - Math.cos(S.phi) * off;
+    if (Math.abs(e.v) * vsc < 3) label(c, "v = 0", bx, by - bobR - 16, css("--vcol"), { bold: true });
+    else {
+      arrow(c, ox, oy, ox + vx, oy + vy, css("--vcol"), 3.4);
+      label(c, showVal ? "v = " + nf(Math.abs(e.v), 2) + " m/s" : "v", ox + vx + (vx > 0 ? 8 : -8), oy + vy - 12, css("--vcol"), { align: vx > 0 ? "left" : "right", bold: true });
+    }
+  }
+}
+
+function drawGraph() {
+  const [c, W, H] = fit($("graph"));
+  c.clearRect(0, 0, W, H);
+  const vm = Math.sqrt(2 * S.g * S.l * (1 - Math.cos(S.A))), [ef, eu] = eUnit();
+  const rows = [];
+  if ($("gS").checked) rows.push({ k: "s", lines: [[p => p.s * 100, css("--scol")]], max: S.l * S.A * 100, lab: "s in cm", d: 1, sym: true });
+  if ($("gV").checked) rows.push({ k: "v", lines: [[p => p.v, css("--vcol")]], max: vm, lab: "v in m/s", d: 2, sym: true });
+  if ($("gA").checked) rows.push({ k: "a", lines: [[p => p.a, css("--acol")]], max: S.g * Math.sin(S.A), lab: "a in m/s²", d: 2, sym: true });
+  if ($("gE").checked) rows.push({ k: "E", lines: [[p => p.Ep * ef, css("--e-pot")], [p => p.Ek * ef, css("--e-kin")], [p => (p.Ep + p.Ek) * ef, css("--e-ges")]], max: Eges() * ef, lab: "E in " + eu, d: Eges() * ef < 10 ? 1 : 0, sym: false });
+  if (!rows.length) return;
+  const padL = 58, padR = 12, padT = 6, gap = 14, padB = 26, n = rows.length;
+  const rh = (H - padT - padB - gap * (n - 1)) / n, gw = W - padL - padR;
+  const tw = windowLen(), t0 = Math.max(0, S.t - tw), T = S.Tmeas || Tgenau(S.l, S.A), tOff = S.start === "umkehr" ? 0 : (S.lastRev !== null && S.Tmeas ? S.lastRev % T : T / 4);
+  const X = t => padL + (t - t0) / tw * gw;
+  const muted = css("--muted"), grid = css("--grid"), line = css("--line");
+  rows.forEach((r, i) => {
+    const y0 = padT + i * (rh + gap), base = r.sym ? y0 + rh / 2 : y0 + rh - 4;
+    const sc = r.sym ? (rh / 2 - 6) / (r.max * 1.08 || 1) : (rh - 14) / (r.max * 1.08 || 1);
+    c.strokeStyle = grid; c.lineWidth = 1;
+    for (let k = Math.max(1, Math.ceil((t0 - tOff) / T)); tOff + k * T <= t0 + tw; k++) { const xx = X(tOff + k * T); c.beginPath(); c.moveTo(xx, y0); c.lineTo(xx, y0 + rh); c.stroke(); }
+    c.strokeStyle = line; c.beginPath(); c.moveTo(padL, base); c.lineTo(W - padR, base); c.moveTo(padL, y0); c.lineTo(padL, y0 + rh); c.stroke();
+    c.fillStyle = muted; c.textAlign = "right"; c.textBaseline = "middle"; c.font = "500 " + fs(11) + "px " + css("--mono");
+    c.fillText(nf(r.max, r.d), padL - 6, base - r.max * sc); c.fillText("0", padL - 6, base);
+    if (r.sym) c.fillText(nf(-r.max, r.d), padL - 6, base + r.max * sc);
+    c.font = "650 " + fs(12) + "px " + css("--font"); c.textAlign = "left"; c.textBaseline = "top";
+    c.textAlign = "right"; const lw = c.measureText(r.lab).width;
+    c.fillStyle = css("--panel"); c.globalAlpha = .85; c.fillRect(W - padR - lw - 6, y0, lw + 6, fs(12) + 4); c.globalAlpha = 1;
+    c.fillStyle = r.lines.length > 1 ? css("--ink") : r.lines[0][1]; c.fillText(r.lab, W - padR - 3, y0 + 1);
+    r.lines.forEach(([f, col], j) => {
+      c.strokeStyle = col; c.lineWidth = j === 2 ? 1.8 : 2.3; c.lineJoin = "round"; c.beginPath();
+      S.hist.forEach((p, q) => { const xx = X(p.t), yy = base - f(p) * sc; q ? c.lineTo(xx, yy) : c.moveTo(xx, yy); });
+      c.stroke();
+      const last = S.hist[S.hist.length - 1];
+      if (last) { c.fillStyle = col; c.beginPath(); c.arc(X(last.t), base - f(last) * sc, 4, 0, 7); c.fill(); }
+    });
+  });
+  c.fillStyle = muted; c.textAlign = "center"; c.textBaseline = "top"; c.font = "500 " + fs(11) + "px " + css("--mono");
+  for (let k = Math.max(1, Math.ceil((t0 - tOff) / T)); tOff + k * T <= t0 + tw; k++) c.fillText(k === 1 ? "T" : k + "T", X(tOff + k * T), H - padB + 6);
+  c.textAlign = "left"; c.fillText(nf(t0, 1) + " s", padL, H - padB + 6);
+  c.textAlign = "right"; c.fillText("t in s → " + nf(t0 + tw, 1), W - padR, H - padB + 6);
+}
+
+function drawEnergy() {
+  const [c, W, H] = fit($("energy"));
+  c.clearRect(0, 0, W, H);
+  const e = energies(S.phi, S.w), E = Eges(), [ef, eu] = eUnit();
+  const bars = [
+    { lab: "E Lage", v: e.Ep, col: css("--e-pot") },
+    { lab: "E kin", v: e.Ek, col: css("--e-kin") },
+    { lab: "E ges", v: e.Ep + e.Ek, col: css("--e-ges") }];
+  const top = 26, bot = H - 50, bw = Math.min(52, (W - 40) / 4), gapx = (W - 3 * bw) / 4;
+  c.strokeStyle = css("--line"); c.lineWidth = 1; c.beginPath(); c.moveTo(8, bot); c.lineTo(W - 8, bot); c.stroke();
+  bars.forEach((b, i) => {
+    const x = gapx + i * (bw + gapx), h = E > 0 ? b.v / E * (bot - top) : 0;
+    c.fillStyle = b.col; c.globalAlpha = i === 2 ? .45 : .92; c.fillRect(x, bot - h, bw, h); c.globalAlpha = 1;
+    c.fillStyle = css("--ink"); c.font = "650 " + fs(12.5) + "px " + css("--font"); c.textAlign = "center"; c.textBaseline = "top";
+    c.fillText(b.lab, x + bw / 2, bot + 6);
+    c.font = "500 " + fs(11.5) + "px " + css("--mono"); c.fillStyle = css("--muted");
+    c.fillText(nf(b.v * ef, E * ef < 10 ? 2 : 1) + " " + eu, x + bw / 2, bot + 8 + fs(16));
+  });
+  c.fillStyle = css("--muted"); c.font = "500 " + fs(11.5) + "px " + css("--font"); c.textAlign = "center"; c.textBaseline = "top";
+  c.fillText("E_Lage = m·g·h   E_kin = ½·m·v²", W / 2, 4);
+}
+function drawAll() { drawScene(); drawGraph(); drawEnergy(); }
+
+// ---------- Ziehen mit Maus oder Finger (nur im Pausenzustand) ----------
+let dragging = false;
+$("scene").addEventListener("pointerdown", ev => {
+  if (S.playing || !geo) return;
+  const r = $("scene").getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+  if (Math.hypot(x - geo.bx, y - geo.by) < geo.bobR + 14) { dragging = true; $("scene").setPointerCapture(ev.pointerId); }
+});
+$("scene").addEventListener("pointermove", ev => {
+  if (!dragging) return;
+  const r = $("scene").getBoundingClientRect(), x = ev.clientX - r.left - geo.px, y = ev.clientY - r.top - geo.py;
+  let a = Math.atan2(x, Math.max(1, y)); a = Math.max(1 * DEG, Math.min(60 * DEG, Math.abs(a)));
+  S.A = Math.round(a / DEG * 2) / 2 * DEG; S.start = "umkehr"; S.prevT = null; syncInputs(); restart(); showCompare();
+});
+$("scene").addEventListener("pointerup", () => { dragging = false; });
+
+// ---------- Schritt für Schritt ----------
+function schrittmodus(list) {
+  let i = 0; const box = $("schritte");
+  const show = () => { $("schrittNr").textContent = "Schritt " + (i + 1) + " von " + list.length;
+    $("schrittText").innerHTML = list[i].text; list[i].prep && list[i].prep(); updateText();
+    $("btnZurueck").disabled = i === 0; $("btnWeiter").disabled = i === list.length - 1; };
+  $("btnZurueck").onclick = () => { if (i > 0) { i--; show(); } };
+  $("btnWeiter").onclick = () => { if (i < list.length - 1) { i++; show(); } };
+  return { an() { box.classList.add("an"); i = 0; show(); }, aus() { box.classList.remove("an"); },
+           get aktiv() { return box.classList.contains("an"); } };
+}
+const zu = frac => () => { setPlaying(false); S.start = "umkehr"; syncInputs(); restart(); if (frac) step(Tgenau(S.l, S.A) * frac); };
+const schritte = schrittmodus([
+  { text: "Die Kugel wird zur Seite gezogen und dabei um <i>h</i> angehoben. Im Umkehrpunkt steht sie still: Die ganze Energie ist <b style='color:var(--e-pot)'>Lageenergie</b> <i>E</i><sub>Lage</sub> = <i>m</i>·<i>g</i>·<i>h</i>.", prep: zu(0) },
+  { text: "Nach ⅛ <i>T</i>: Die Kugel ist schon tiefer und schneller. Ein Teil der Lageenergie ist in <b style='color:var(--e-kin)'>Bewegungsenergie</b> umgewandelt. Die Summe bleibt gleich.", prep: zu(1 / 8) },
+  { text: "Nach ¼ <i>T</i> ist die Kugel im tiefsten Punkt (Ruhelage): <i>h</i> = 0, die Kugel ist am schnellsten. Jetzt ist alles Bewegungsenergie: ½·<i>m</i>·<i>v̂</i>² = <i>m</i>·<i>g</i>·<i>h</i>, also <i>v̂</i> = √(2·<i>g</i>·<i>h</i>).", prep: zu(1 / 4) },
+  { text: "Nach ½ <i>T</i> ist die Kugel im linken Umkehrpunkt: Sie ist wieder um <i>h</i> angehoben, <i>v</i> = 0, alles ist wieder Lageenergie.", prep: zu(1 / 2) },
+  { text: "Nach einer ganzen Schwingungsdauer <i>T</i> ist der Anfangszustand wieder erreicht. Die Energie wandelt sich in jeder Schwingung zweimal hin und her. Starte die Simulation und vergleiche mit dem Energie-Diagramm.", prep: zu(1) },
+]);
+$("btnSchrittmodus").onclick = () => schritte.aktiv ? schritte.aus() : schritte.an();
+$("btnSchrittEnde").onclick = () => schritte.aus();
+
+// ---------- Schleife ----------
+let last = null, acc = 0;
+function frame(ts) {
+  if (last === null) last = ts;
+  const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
+  if (S.playing) { step(dt * S.speed); acc += dt; if (acc > 0.1) { updateText(); acc = 0; } }
+  drawAll();
+  requestAnimationFrame(frame);
+}
+setPlaying(S.playing);
+syncInputs(); restart(); showCompare(); drawAll();
+requestAnimationFrame(frame);
+window.__fadenpendel = { S, step, Tgenau, Tformel, Eges, energies, restart };
+})();
+</script>
